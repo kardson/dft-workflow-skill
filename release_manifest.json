@@ -144,7 +144,7 @@
     },
     {
       "path": "tools/agent_capabilities.py",
-      "sha256": "b545b94ff1cea91131f36106171d72f5efd2c1e578830f2b75e517d078347895"
+      "sha256": "bb7e61c3a93f0e9be1d9527a932942f77d9f25a13a81f1eac399ce933d9492d8"
     },
     {
       "path": "tools/analysis_addons.py",
@@ -180,7 +180,7 @@
     },
     {
       "path": "tools/progress_evidence.py",
-      "sha256": "9cf7a2d16b5cafb18ec324292fd2d2475b1a32224d22d2d0d5dbee70cc50fbb5"
+      "sha256": "23569003837a8247dbfaf34544faa76eaa9a67797f426d5179f3135be86b0aaf"
     },
     {
       "path": "tools/progress_snapshot.py",
@@ -284,7 +284,7 @@
     },
     {
       "path": "tools/workflow_command_catalog.py",
-      "sha256": "f434898b91ae5ca03e7ad86f344448e5183c1e9d70328808c675cf3cd7b3c0c3"
+      "sha256": "f089491e9071c9c6a9486d6634bcc3a2782c365835ddcb6aa97aef7c90b38306"
     },
     {
       "path": "tools/workflow_metrics.py",

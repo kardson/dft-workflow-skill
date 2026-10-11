@@ -20,6 +20,7 @@ import base64
 import binascii
 from collections import defaultdict
 from datetime import datetime, timezone
+import importlib
 import json
 import math
 import re
@@ -283,7 +284,11 @@ def _compatible_manifest_value(
     return value, source
 
 
-def load_execution_identity(manifest_path: Path) -> dict[str, Any]:
+def _load_execution_identity(
+    manifest_path: Path,
+    *,
+    allow_exact_quick_status_nested_batch: bool = False,
+) -> dict[str, Any]:
     manifest = read_json(manifest_path)
     if not isinstance(manifest, dict) or manifest.get("route") not in {None, "vasp"}:
         raise EvidenceError("execution manifest is not a VASP manifest")
@@ -313,8 +318,16 @@ def load_execution_identity(manifest_path: Path) -> dict[str, Any]:
     case, case_source = _compatible_manifest_value(
         manifest, "case", nested_sources, "case_id", "case"
     )
+    exact_quick_status_nested_batch = False
     if not isinstance(batch, str) or not REMOTE_BATCH_RE.fullmatch(batch):
-        raise EvidenceError("execution manifest remote_batch_dir is unsafe or missing")
+        exact_quick_status_nested_batch = (
+            allow_exact_quick_status_nested_batch
+            and _matches_local_quick_status_identity(
+                manifest, task_id, unit_id, batch, case
+            )
+        )
+        if not exact_quick_status_nested_batch:
+            raise EvidenceError("execution manifest remote_batch_dir is unsafe or missing")
     if not isinstance(case, str) or not CASE_RE.fullmatch(case) or case in {".", ".."}:
         raise EvidenceError("execution manifest case is unsafe or missing")
     case_dir = f"{batch}/{case}"
@@ -328,6 +341,10 @@ def load_execution_identity(manifest_path: Path) -> dict[str, Any]:
             raise EvidenceError(
                 f"execution manifest {label} does not equal batch_dir/case_id"
             )
+    if exact_quick_status_nested_batch and not any(
+        "case_dir" in source for _namespace, source in case_dir_sources
+    ):
+        raise EvidenceError("execution manifest case_dir is required for the approved nested batch")
     runtime_input_dir = manifest.get("runtime_input_dir")
     if runtime_input_dir is None:
         runtime_input_dir = case_dir
@@ -340,6 +357,10 @@ def load_execution_identity(manifest_path: Path) -> dict[str, Any]:
         raise EvidenceError(
             "execution manifest runtime_input_dir must be the case directory "
             "or an explicitly verified batch directory"
+        )
+    if exact_quick_status_nested_batch and manifest.get("runtime_input_dir") != case_dir:
+        raise EvidenceError(
+            "approved nested batch requires runtime_input_dir to equal batch_dir/case_id"
         )
     return {
         "task_id": task_id,
@@ -371,6 +392,11 @@ def load_execution_identity(manifest_path: Path) -> dict[str, Any]:
     }
 
 
+def load_execution_identity(manifest_path: Path) -> dict[str, Any]:
+    """Load the shared identity contract without the quick-status-only exception."""
+    return _load_execution_identity(manifest_path)
+
+
 def _optional_manifest_identity_value(
     manifest: dict[str, Any],
     direct_key: str,
@@ -396,9 +422,54 @@ def _optional_manifest_identity_value(
     return value, source
 
 
+def _matches_local_quick_status_identity(
+    manifest: dict[str, Any],
+    task_id: str,
+    unit_id: str,
+    batch: Any,
+    case: Any,
+) -> bool:
+    try:
+        execution_id, _execution_source = _optional_manifest_identity_value(
+            manifest, "execution_id", "execution_id", "execution_id"
+        )
+        tmux_session, _tmux_source = _optional_manifest_identity_value(
+            manifest, "tmux_session", "tmux_session", "tmux_session"
+        )
+        host = _host_identity(manifest)
+    except EvidenceError:
+        return False
+    identity = (
+        task_id,
+        unit_id,
+        execution_id,
+        host.get("user"),
+        host.get("address"),
+        host.get("port"),
+        batch,
+        case,
+        tmux_session,
+    )
+    module_name = (
+        f"{__package__}.progress_evidence_local_adapter"
+        if __package__
+        else "progress_evidence_local_adapter"
+    )
+    try:
+        adapter = importlib.import_module(module_name)
+    except ModuleNotFoundError as exc:
+        if exc.name == module_name:
+            return False
+        raise
+    matcher = getattr(adapter, "matches_quick_status_identity", None)
+    return bool(callable(matcher) and matcher(identity))
+
+
 def _load_quick_status_identity(manifest_path: Path | str) -> dict[str, Any]:
     path = Path(manifest_path).resolve()
-    base = load_execution_identity(path)
+    base = _load_execution_identity(
+        path, allow_exact_quick_status_nested_batch=True
+    )
     manifest = read_json(path)
     if not isinstance(manifest, dict):
         raise EvidenceError("execution manifest must be an object")
