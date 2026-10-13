@@ -1,94 +1,44 @@
 # DFT Workflow Toolkit
 
-面向研究者与其 agent 的 DFT 工作流工具，当前计算工具主要面向 **VASP**。提供输入检查、执行状态与证据整理、静态交付、只读诊断、属性依赖规划、参数提案审阅和观察指标汇总。科学方法与最终科学接受由研究者负责。
+帮助科研人员把材料计算的**研究问题、计算输入、运行证据和结果解释**连接起来。当前计算工具主要面向 **VASP**。
 
-本仓库适合希望逐步建立可追溯计算流程的团队。工具不提供默认研究参数，也不会通过规划或审阅自动授权计算。公开内容只包含通用源码、文档、空白模板和合成测试。
+如果你已有结构、计算文件或结果，希望知道下一步需要补什么证据、检查哪些设置、怎样把任务交给同事或 AI 助手，可以从这里开始。首次试用只需要 Python，使用随仓库提供的模拟示例；真实研究还需要你自己的计算软件、合法赝势，以及负责方法与结果判断的研究者。
 
-## 科研用户可以怎样使用
+**快速入口：** [第一次试用](#第一次试用) · [开始真实任务](#开始真实任务) · [读懂结果](#读懂结果) · [工具与安装](#工具与安装)
 
-本工具库帮助你把研究目标整理成明确计算任务，准备和检查输入，查看运行证据，整理结果并交接给其他研究者或 agent。它不是一键自动完成研究的软件；方法选择、计算批准和最终科学判断由研究者负责。
+## 它能帮我做什么？
 
-### 七个使用流程
-
-| 流程 | 可以做什么 | 主要入口或工具 | 你需要提供什么 |
-|---|---|---|---|
-| 1. 明确目标与计算计划 | 拆分目标性质的计算依赖，列出缺少的前提；审阅参数变更 | property_plan、parameter_advice | 研究目标、结构和文献依据、已批准方法与参数、计算预算；变更时提供原方案和提案 |
-| 2. 准备结构与候选输入 | 按明确规格生成当前支持范围内的 POSCAR/INCAR/KPOINTS；按需校核几何 | vasp_input_generator、几何辅助工具；按需使用 ASE、pymatgen | 来源结构、元素顺序、约束、完整参数及 fresh/restart 条件；合法赝势由你另外提供，生成器不组装 POTCAR |
-| 3. 执行前检查与交付 | 核对实际输入、来源身份、批准契约和输出要求，整理静态交付包 | vasp_core_cli、vasp_executor、批准包校验、static_delivery_builder | 批准规格、实际输入目录、软件与赝势环境、资源设置、输出验收要求；重启时提供旧证据 |
-| 4. 查看进度与运行证据 | 从已有输出整理步数、力和计时；在明确授权与部署配置下查询远端或监督作业 | progress_snapshot、progress_evidence、vasp_operations、job_watch | 运行目录、显式任务清单；远端查询需要私有连接配置和授权，持续监督需另外明确范围 |
-| 5. 检查结果与诊断问题 | 区分程序结束、输出完整与收敛条件，报告诊断类别及缺失证据 | vasp_executor 后检查、diagnostic_taxonomy、analysis_addons | 实际 OUTCAR、vasprun.xml、OSZICAR、标准输出/错误，原输入与明确验收标准 |
-| 6. 分析与登记结果 | 整理结构和能量、比较明确参照、按需调用可选分析，保存可追溯结果 | scientific_helpers、result_registry、analysis_addons；按需使用科学/分析依赖 | 实际结果、参照体系、比较方式和目标性质；可选功能需要相应依赖与输出文件 |
-| 7. 核验证据与交接 | 核对指定 JSON 字段，整理回执、缺口及观察指标，供其他人或 agent 接手 | tool_evidence、evidence_verifier、workflow_metrics、任务模板 | 指定证据与字段、任务回执、交接范围；效率比较还需要真实可比任务和耗时记录 |
-
-文献检索和文档解析可在你的私有研究环境中先完成，再将依据交给规划工具。本仓库不附文献库、文档解析服务或研究内容。VASPKIT 可以在你自己的部署中辅助准备模板；公开库不附工作站调用配置和私有准备后端。
-
-### 开始一个真实任务前
-
-准备以下五类信息即可让研究者或 agent 开始整理任务。你可以先用自然语言描述，由 agent 转成工具要求的 JSON；未确定的科学选择应列为缺口，不能自动填成批准参数。
-
-- **目标**：研究问题、希望得到的性质和本次交付。
-- **材料**：来源结构、已有输入输出、文献依据或已有方案，保存在私有工作区。
-- **方法**：软件和版本、计算类型、参数、约束、外场、参照及收敛要求；明确尚未确定的项。
-- **环境**：合法软件与赝势、计算资源；远端配置和密钥留在你自己的私有环境。
-- **权限与验收**：允许读写的位置，允许准备、分析、查询还是提交，完成条件和停止条件。
-
-可以这样向你的 agent 交接：
-
-> 我想研究……，结构和已有结果在……。使用……软件，已确定参数为……，待讨论项为……。本次允许……，请交付……，遇到……时停止并报告。
-
-### 使用范围与结果含义
-
-- 输入生成和分析只支持各入口明确声明的任务范围，不能假定任意 VASP 任务均可自动处理。
-- 通用校验 CLI 不提供准备或提交命令；运行管理需要你自己的部署与明确授权，不能直接替任意服务器提交计算。
-- 准备完成不等于已提交，退出码 0 不等于收敛，检查通过不等于科学结论成立。规划结果为 BLOCKED 可以表示工具正常运行但科学前提不足。
-- 真实诊断缺失类别、真实工作流效率对照、人工耗时和外部首次人类用户观察尚未验证。新诊断功能未启用，不能宣称已证明效率提升。
-- 软件兼容范围见下表；公开源码与真实研究数据分开，文献、论文、想法、结构、计算结果、主机信息和密钥不得提交到公开库。
-
-## 适用软件与版本
-
-本工具库面向 **VASP** 计算流程，使用者需自行提供计算软件、合法赝势和运行环境。
-
-| 软件 | 参照版本 | 证据与使用范围 |
+| 你遇到的问题 | 工具提供的帮助 | 仍需研究者判断的内容 |
 |---|---|---|
-| VASP | **6.5.1** | 开发环境配置参照；处理 VASP 输入、输出与结果证据，不等于其它版本已兼容 |
-| VASPKIT | **1.5.1** | 既有集成记录参照；公开工具不附工作站调用配置 |
+| 不知道下一步缺什么 | 按明确的目标和已有证据列出计算依赖、前提和缺口 | 科学问题、方法和需要的精度 |
+| 担心输入不一致 | 在支持范围内生成候选输入，检查实际设置、结构和来源 | 模型是否合适、参数是否有依据 |
+| 想知道计算进展 | 整理已有输出里的步数、力、计时和缺失证据 | 是否需要进一步取证或处理异常 |
+| 计算结束了，但不确定能否使用 | 核对输出和指定的收敛要求，保留警告与冲突 | 结果适用于哪个科学问题 |
+| 希望同事或 AI 助手接手 | 保存明确的任务、证据路径、限制和下一步 | 哪些动作已获批准、何时需要重新决定 |
 
-Python 源码语法要求为 **3.10+**。这不代表所有解释器和第三方依赖组合均已验证。
+只想读已有输出或做一次检查，可以直接选择对应工具。你不必先建立一套完整的计算管理系统。
 
-### 已记录安装环境
+## 第一次试用
 
-科学工具环境 Python **3.12.14**；分析环境 Python **3.12.10**。下表由安装版本记录生成，不是最低版本声明或完整安装锁。
+这一步练习的是“发现计算计划缺少什么”，不需要安装 VASP 或科学分析包。
 
-| 包 | 科学工具环境 | 可选分析环境 |
-|---|---|---|
-| numpy | 2.5.3 | 2.5.3 |
-| ase | 3.29.0 | 3.29.0 |
-| pymatgen | 2026.9.24 | 2026.9.24 |
-| pymatgen-core | 2026.9.23 | 2026.9.23 |
-| matplotlib | 3.11.2 | 3.11.2 |
-| custodian | 未记录 | 2025.12.14 |
-| py4vasp | 未记录 | 未记录 |
-| py4vasp-core | 未记录 | 0.11.3 |
-| sumo | 未记录 | 3.0.0 |
-| MacroDensity | 未记录 | 3.1.0+source.a9b56cce |
+### 1. 获取工具
 
-历史公开合成测试基线为 `563e1ec`：56 项，3 项平台相关跳过。此结果仅覆盖该提交的工具快照；本表的安装观察不自动成为新代码或全部分析功能的验收。
+安装 Python **3.10 或更新版本**，并获取本仓库。Python 3.10+ 是源码语法要求；已有安装验证主要来自 Windows AMD64 / Python 3.12.14，其他环境的验证范围见[兼容记录](docs/compatibility-clean-science.json)。
 
-公开快照 `3c6e990` 在干净 Python **3.12.14** 标准库环境中通过文件守卫、四个帮助入口及三个合成私有工作区 CLI 验证；没有安装科学或分析依赖，未生成计算输入或授权执行。此证据不覆盖 O2 新实现。
+如果已有 Git，可运行：
 
-本地 O2 工具候选（身份 `23eee01417f9`）通过公开合成套件 56 项（3 项平台相关跳过）；新增通用 CLI 的 4 项集成测试分别在科学依赖环境和 without-pip 标准库环境通过。覆盖能力目录、私有操作拒绝、工作区越界和缺失模块拒绝；不覆盖科学依赖的干净安装、实际 VASP 运行或全部分析功能。此记录是本地候选证据，不是远端发布记录。
+```sh
+git clone https://github.com/kardson/dft-workflow-toolkit.git
+cd dft-workflow-toolkit
+python --version
+```
 
-新的隔离科学环境在 **Windows / AMD64 / Python 3.12.14** 上完成安装与依赖检查：公开工具 53 项通过、3 项符号链接权限跳过，通用 CLI 4 项通过，Si/O 合成几何调用通过。只覆盖记录指定的工具快照及安装组合，不包含真实 VASP 计算。见 [机器可读兼容记录](docs/compatibility-clean-science.json) 和 [复现步骤](docs/reproduce-clean-science.md)。
+也可以从 GitHub 下载仓库文件。下面的命令都从工具库根目录执行。
 
-Linux/macOS 完整套件、全部可选分析功能、其它 VASP/Python/依赖版本及跳过的链接边界尚未验证。新增实际验证后，应更新兼容记录并重新生成本节。
+### 2. 运行一个模拟规划
 
-只用标准库工具时无需安装科学或分析依赖。按需使用 `requirements-science.txt`、`requirements-analysis.txt`；MacroDensity 的来源与构建需另行核对。VASP、授权赝势与工作站配置不随仓库提供。工具许可证尚未指定，第三方软件遵循各自许可，见 [第三方说明](THIRD_PARTY.md)。
-
-## 第一次使用
-
-首次本地试用可直接复制 [完整合成规划请求](examples/synthetic-property-request.json)，无需从测试代码猜字段。它故意缺少科学合同，预期退出码为 0、结果为 `BLOCKED`、10 项证据缺口，且执行授权和 gate 均为 false；不会生成 VASP 输入。
-
-从工具库根目录运行以下 PowerShell 示例，工作区在旁边新建，已有目录即停止：
+Windows PowerShell：
 
 ```powershell
 $toolkitRoot = (Get-Location).Path
@@ -100,114 +50,144 @@ $env:DFT_WORKSPACE_ROOT = $trialWorkspace
 python -B (Join-Path $toolkitRoot 'tools/property_plan.py') --request (Join-Path $trialWorkspace 'request.json') --output-dir (Join-Path $trialWorkspace 'plan')
 ```
 
-查看 `plan/property_plan.json`、`plan/blockers.json` 和 `plan/dependency_table.csv`。`BLOCKED` 表示需要补实际批准的来源与证据；不要删除 blocker 或把合成合同当成研究批准。真实使用仍需下面的任务交接和私有工作区约束。
+示例请求见 [synthetic-property-request.json](examples/synthetic-property-request.json)。新文件保存在工具库旁边的独立目录里，已有同名目录时停止，方便保留此前的工作。
 
-1. 将本仓库克隆到工具目录，准备 Python 3.10 或更新版本。
-2. 阅读本页和 [AGENTS.md](AGENTS.md)，再按任务阅读 [协作流程](docs/workflow.md)。
-3. 为真实研究建立独立私有工作区，明确来源、目标、允许动作和停止条件。
-4. 先查看相应工具的 `--help`；用显式规格执行一次本地任务，再检查生成的回执。
-
-从仓库根目录检查公开文件边界：
+<details>
+<summary>Linux / macOS 对应命令</summary>
 
 ```sh
-python -B scripts/check_public_release.py --require-repository
+toolkit_root="$PWD"
+trial_workspace="$(dirname "$toolkit_root")/synthetic-first-plan"
+if [ -e "$trial_workspace" ]; then
+  echo '请选择新目录，保留已有工作'
+else
+  mkdir "$trial_workspace" &&
+  cp "$toolkit_root/examples/synthetic-property-request.json" "$trial_workspace/request.json" &&
+  DFT_WORKSPACE_ROOT="$trial_workspace" python -B "$toolkit_root/tools/property_plan.py" --request "$trial_workspace/request.json" --output-dir "$trial_workspace/plan"
+fi
 ```
 
-基础解析、契约检查、证据摘要及新增规划工具只依赖标准库。需要几何与科学解析时，在自己的隔离环境安装：
+这是相同示例的命令写法；Linux/macOS 完整工具套件尚未验证。
 
-```sh
-python -m venv .venv
-# 激活该环境后：
-python -m pip install -r requirements-science.txt
-```
+</details>
 
-附加诊断、DOS、HDF5 等分析按需安装 `requirements-analysis.txt`。MacroDensity 需另行取得。这里未固定所有依赖版本；请为实际研究记录并验证自己的软件环境。
+### 3. 看懂输出
 
-## 按任务选择入口
+打开新目录中的三个文件：
 
-通用校验入口为 `tools/vasp_core_cli.py`，与能力表共用命令目录。先查看帮助和当前安装闭包：
+| 文件 | 看什么 |
+|---|---|
+| `plan/property_plan.json` | 计划状态和计算依赖 |
+| `plan/blockers.json` | 尚未具备的来源、方法或证据 |
+| `plan/dependency_table.csv` | 各步骤之间的依赖，可用表格软件查看 |
+
+**预期结果是 `BLOCKED`，命令正常退出。** 这个模拟请求故意缺少科学合同：工具成功发现了缺口，因此目前不具备继续计算的条件。示例不会生成 VASP 输入或启动计算。
+
+你第一次试用的目标，是能找到缺口并解释下一步需要补什么。真实研究中，应补充实际依据后再作判断；不要删除缺口或把模拟数值当作研究参数。
+
+## 开始真实任务
+
+先把下面几件事用自然语言写清楚。你可以交给同事或 AI 助手，由他们整理成工具要求的文件格式。
+
+- **研究问题：** 想回答什么？已有证据为什么还不够？
+- **来源材料：** 结构、实际输入输出、文献或已批准方案在哪里？
+- **科学方案：** 模型、方法、关键参数、约束和比较基准由谁确定？哪些尚未确定？
+- **成本与停止点：** 预计资源、时间和预算是多少？遇到什么情况先停下来判断？
+- **允许动作与交付：** 本次允许读取、准备、分析、查询还是运行？最后交付什么证据？
+
+例如：
+
+> 我想比较两种候选结构在同一方法下的稳定性。来源和已有结果在私有工作区中。请先核对可比条件，列出证据缺口，并给出需要我决定的事项。本次允许本地读取和规划，交付一份计划与依据。
+
+### 用一张任务卡保持清楚
+
+在你的私有研究工作区中维护一张当前任务卡，技术细节链接到原始规格和结果，避免在多处复制“当前状态”。
+
+| 项目 | 写什么 |
+|---|---|
+| 研究问题 | 本次只回答哪一个问题 |
+| 当前阶段 | 尚未准备、已准备、已启动、结果已返回或已完成科学审阅 |
+| 证据与时间 | 实际输入或主输出在哪里；最后核实是什么时候 |
+| 下一步与负责人 | 一个明确动作、执行人及允许范围 |
+| 结论与限制 | 做完能说明什么，还有哪些不确定性 |
+
+科学方案需要由负责研究的人裁决；用户对执行动作的批准应写明范围。准备完成、工具检查通过或一项旧任务的批准，均不能自动扩展成新的运行或参数扫描。
+
+真实研究文件放在独立的**私有工作区**。规划等工具用 `DFT_WORKSPACE_ROOT` 指定工作区；其他工具按各自 `--help` 接受路径。环境变量不会自动切换当前目录，建议传入绝对路径。结构、计算输出、主机配置和密钥保存在自己的环境中。
+
+进一步说明：[私有工作区](docs/private_workspace.md)、[协作流程](docs/workflow.md)、[任务记录模板](templates/task_record.template.json)、[交接模板](templates/handoff.template.md)。
+
+## 读懂结果
+
+先区分计算的执行状态和结果的科学用途：
+
+| 看到的记录 | 可以说明什么 |
+|---|---|
+| 输入已准备 | 候选文件到位；还不能说明计算已经运行 |
+| 已启动 / `RUNNING` | 在记录的观察时间有启动或运行证据；历史快照不保证现在仍在运行 |
+| 正常退出 / 退出码 0 | 对应程序或检查完成；仍需核对输出、收敛条件和警告 |
+| `BLOCKED` | 当前前提不足；查看具体缺口，工具本身可能已正常完成 |
+| `UNKNOWN` / `PARTIAL` | 证据缺失或不完整，暂时无法作完整判断 |
+| 结果已接受 | 应有研究者给出的依据、限定用途和仍然存在的限制 |
+
+一份有用的结果报告，应该让读者能回答：**原本想知道什么、实际观察到什么、依据在哪里、结论可信到什么程度、下一步由谁决定。**
+
+比较能量、结构或电子性质时，需要核对方法、赝势、数值设置、参照和相关收敛条件。工具可以记录这些事实，具体物理解释仍由研究者负责。输入和文件完整性检查通过，也不能单独证明科学结论成立。
+
+## 工具与安装
+
+第一次规划试用和基础契约、证据检查只依赖 Python 标准库。根据实际任务再安装科学或分析依赖。
+
+| 用途 | 入口 / 依赖 |
+|---|---|
+| 目标依赖规划、参数提案检查 | `tools/property_plan.py`、`tools/parameter_advice.py` |
+| 实际输入及执行前后检查 | `tools/vasp_core_cli.py`、`tools/vasp_executor.py` |
+| 当前支持范围内的候选输入生成 | `tools/vasp_input_generator.py` |
+| 本地进度和运行证据 | `tools/progress_snapshot.py`、`tools/progress_evidence.py` |
+| 结果记录、几何比较和附加分析 | `tools/result_registry.py`、`tools/scientific_helpers.py`、`tools/analysis_addons.py` |
+| 工具回执、指定字段核验和观察指标 | `tools/tool_evidence.py`、`tools/evidence_verifier.py`、`tools/workflow_metrics.py` |
+
+通用检查入口提供 `validate-bundle`、`preflight`、`postcheck`、`evidence` 和 `capabilities`，没有准备或提交计算的命令。各入口都有明确支持范围；缺少的科学选择不会自动填成批准参数。
+
+<details>
+<summary>查看工具能力和可选安装步骤</summary>
 
 ```sh
 python -B tools/vasp_core_cli.py --help
 python -B tools/vasp_core_cli.py capabilities
-python -B tools/vasp_core_cli.py --workspace /path/to/private-workspace validate-bundle --bundle approved-bundle.json
-```
-
-该入口提供 `validate-bundle`、`preflight`、`postcheck`、`evidence`、`capabilities` 五种模式。文件参数必须在所选工作区内；默认拒绝私有批准配置及 `LREAL=Auto`。它不提供准备或提交计算的命令，校验通过也不构成执行授权。缺失模块的命令不会被能力表列为可用。其他分析与规划工具仍按下表独立调用。
-
-各工具独立运行，不需要原开发者的总入口或工作站配置。
-
-| 任务 | 入口 | 输出与边界 |
-|---|---|---|
-| 检查或生成本地候选输入 | `tools/vasp_input_generator.py` | 使用明确规格；准备完成不等于已提交 |
-| 执行前后检查 | `tools/vasp_executor.py` | 区分程序结束、证据完整性和收敛状态 |
-| 整理本地进度 | `tools/progress_snapshot.py` | 解析步数、力、计时及缺失证据 |
-| 有界远端证据查询 | `tools/progress_evidence.py` | 需要显式 manifest 和独立远端授权 |
-| 操作计划与作业监督 | `tools/vasp_operations.py`、`tools/job_watch.py` | 监督可运行配置命令，使用前明确批准范围 |
-| 静态交付 | `tools/static_delivery_builder.py` | 默认关闭执行批准门；配合交付检查与运行守卫 |
-| 保存结果记录 | `tools/result_registry.py` | 不可变 JSON 与可重建索引，实际结果留在私有区 |
-| 几何与显式参照比较 | `tools/scientific_helpers.py` | 报告事实，不替研究者选择参照 |
-| 附加分析与诊断分类 | `tools/analysis_addons.py`、`tools/diagnostic_taxonomy.py` | 只读诊断及候选分析，不自动修复或重启 |
-| 工具回执摘要 | `tools/tool_evidence.py` | 读取指定 JSON 回执，生成证据 sidecar |
-| 属性依赖规划 | `tools/property_plan.py` | 生成依赖计划和阻塞项，不生成计算输入或启动计算 |
-| 参数提案审阅 | `tools/parameter_advice.py` | 对照原批准契约检查变更，不自动接受提案 |
-| 显式 JSON 内容核验 | `tools/evidence_verifier.py` | 只比较清单指定字段，输出匹配与缺口；见[核验合同与合成试用](docs/evidence-verifier.md) |
-| 工作流观察指标 | `tools/workflow_metrics.py` | 只汇总显式列出的回执；缺少可比证据时不宣称提速 |
-| 管理记录检查 | `tools/workflow_check.py` | 当前限制 MPI-only、最多 64 ranks；源码锁检查不是通用依赖管理 |
-
-查看新增工具参数：
-
-```sh
-python -B tools/tool_evidence.py --help
 python -B tools/property_plan.py --help
-python -B tools/parameter_advice.py --help
-python -B tools/workflow_metrics.py --help
 ```
 
-`approved_bundle_validation.py` 是完整同源的契约校验模块，`approved_bundle.py` 是其公开薄入口。公开版包含五模式通用入口和能力目录；工作站专用准备后端、私有总入口和真实环境配置保留在私有项目。校验通过不授权准备或提交计算。
-
-## 私有工作区与实际任务
-
-源码目录与真实研究数据分开。规划和指标工具通过 `DFT_WORKSPACE_ROOT` 选择私有工作区；未设置时使用工具仓库根目录，仅适合合成试用。处理真实材料前明确设置该变量，输入引用与输出目录必须满足工具的工作区边界检查。命令行相对路径以当前目录解析；建议像下方示例一样传绝对路径。计算目录使用 `private_runs/`，规划和报告不能写入该目录。
-
-PowerShell：
-
-```powershell
-$env:DFT_WORKSPACE_ROOT = '/path/to/private-research'
-```
-
-Linux/macOS：
+需要 ASE / pymatgen 等几何或科学解析功能时，在工具库之外建立自己的隔离环境，再使用该环境的 Python 从工具库根目录安装：
 
 ```sh
-export DFT_WORKSPACE_ROOT=/path/to/private-research
+python -m pip install -r requirements-science.txt
 ```
 
-下面只示范命令结构。JSON 需由研究者与 agent 按实际来源准备，路径需替换；不要把真实数据放入公开库：
+需要相应 DOS、HDF5 或附加分析功能时，再按需安装 `requirements-analysis.txt`。部分功能还要求特定输出文件，MacroDensity 需另外取得和核对。
 
-```sh
-python -B tools/tool_evidence.py --receipt /path/to/private-research/receipts/result.json
-python -B tools/property_plan.py --request /path/to/private-research/requests/properties.json --output-dir /path/to/private-research/reports/new-plan
-python -B tools/parameter_advice.py --approved-bundle /path/to/private-research/requests/approved.json --proposal /path/to/private-research/requests/proposal.json --output-dir /path/to/private-research/reports/new-review
-python -B tools/workflow_metrics.py --observations /path/to/private-research/observations/manifest.json --output-dir /path/to/private-research/reports/new-metrics
-```
+已记录的科学安装组合为 **Windows AMD64 / Python 3.12.14**。复现步骤和具体依赖版本见[环境复现说明](docs/reproduce-clean-science.md)与[兼容记录](docs/compatibility-clean-science.json)。记录的是特定环境和工具快照，不代表所有操作系统或依赖版本已兼容。
 
-规划、审阅和指标输入分别使用 `vasp-property-request/v1`、`vasp-parameter-proposal/v1`、`vasp-workflow-observations/v1`。参数审阅还需要 `vasp-approved-bundle/v1`。合成测试展示这些契约的构造和拒绝样例；其中参数与数值只用于程序测试。输出目录必须是新的，保护性检查会拒绝计算目录或不允许的来源。
+VASP 的配置参照版本为 **6.5.1**，VASPKIT 集成记录参照版本为 **1.5.1**。计算软件、授权赝势和工作站调用配置由使用者自行提供。
 
-规划和参数审阅可以同时指定 `--evidence-manifest` 与 `--evidence-receipt`，消费 `vasp-evidence-manifest/v1` 与 `vasp-evidence-verification/v1`。主体、清单或源内容变化使旧核验失效；核验只附加客观匹配，不改变原 blocker、建议状态、执行 gate 或科学授权。不提供成对选项时保持原默认行为。
+静态交付、操作计划和作业监督还有 `static_delivery_builder.py`、`vasp_operations.py`、`job_watch.py` 等入口。它们需要自己的部署配置和明确授权，使用前阅读帮助与协作流程。
 
-运行规划或参数审阅时，先切换到独立私有工作区，再用工具目录的完整路径调用脚本，并将 `DFT_WORKSPACE_ROOT` 设置为该私有工作区。CLI 的相对输入参数按当前目录解析；设置环境变量不会自动切换目录。也可以给输入参数使用工作区内的绝对路径。试用产生 `BLOCKED` 回执仍可表示程序正常完成：继续查看实际 blocker，不能把它改成执行批准。
+</details>
 
-其他工具按各自 `--help` 接受明确路径，不能假定都支持上述环境变量。公开版远端示例根目录为 `/srv/dft/calculations/<batch>`；部署者须审阅适配自己的批准目录并验证拒绝行为。
+## 让 AI 助手参与
 
-## 让你的 agent 接手
+把 [AGENTS.md](AGENTS.md) 和当前任务卡交给助手，指明来源、允许动作、验收要求和停止条件。可以让助手把自然语言整理成 JSON、执行本地检查、说明证据缺口并解释结果。
 
-将 [AGENTS.md](AGENTS.md) 与任务交接一起交给 agent。交接至少提供：目标、来源路径、批准规格、允许读写位置、允许的本地或远端动作、验收标准、停止条件。
+助手应使用实际输入和主输出，保留未知项。提交、传输、重启和持续监控须遵守你指定的范围；远端配置需要在你的环境中适配。
 
-推荐顺序是读取指定证据、列明缺口、执行批准范围内的准备或分析、运行相关检查、交付实际路径与回执。缺少科学选择时回到研究者；证据不足时保留 UNKNOWN/PARTIAL。默认不启动计算、不联网传输、不持续监控，也不自行授予权限。
+## 验证、贡献与许可
 
-## 验证与贡献
+本仓库包含合成测试。已有安装和合成验证提供有限的工具证据；真实诊断覆盖、真实科研效率收益和外部首次使用者体验仍有未验证部分。因此，目前不能据此承诺科研节时或诊断准确率。
 
-安装科学依赖后运行公开合成测试：
+<details>
+<summary>开发者验证命令和证据说明</summary>
+
+安装需要的科学依赖后，从仓库根目录运行：
 
 ```sh
 python -B -m unittest discover -s tools -p 'test_*.py'
@@ -215,24 +195,19 @@ python -B -m unittest discover -s tests -p 'test_*.py'
 python -B scripts/check_public_release.py --require-repository
 ```
 
-`tools/` 包含工具与内容核验器的合成回归；`tests/` 包含通用 CLI 集成和独立诊断夹具消费测试。两组分别运行，不能只运行其中一组就宣称完整验证。具体计数与跳过原因以所验证工具快照的回执为准；诊断检查缺少指定可选依赖时会明确跳过。
+两组测试覆盖不同内容，不能只运行一组便声称完整验证。测试使用构造数据，不运行 VASP 或连接工作站；实际计数和跳过原因以对应工具快照的记录为准。
 
-测试使用构造的数据，不运行 VASP 或连接工作站。修改时先运行受影响测试，发布前验证公开套件、依赖与内容边界。边界检查不是科学验收，也不能识别所有未发表的思想或未知格式的密钥。
+相关证据：
+[诊断范围](docs/diagnostic-validation-scope.json)、
+[诊断补充](docs/diagnostic-validation-supplement.json)、
+[字段核验说明](docs/evidence-verifier.md)、
+[工作流观察合同](docs/workflow-observation-contract.json)、
+[合成试用证据](docs/workflow-evidence-supplement.json)。
 
-本仓库由维护者的私有开发源按显式清单生成。维护者在源仓库修改并同步发布；外部使用者可以通过 issue 或 PR 提交通用改进，维护者需纳入维护源后重新生成。不要提交真实文献、论文、研究想法、材料结构、计算输入输出、回执、主机信息或密钥。
+</details>
 
-`release_manifest.json` 记录经审阅文件及完整性摘要；新增文件须明确审阅后扩展清单。许可证尚未指定，使用与再分发前请向维护者确认授权。
+你可以通过 issue 或 PR 提交通用改进。维护者在维护源中合入，再按公开清单生成发布；`release_manifest.json` 记录公开文件和完整性摘要。贡献中请使用合成数据，真实研究内容和配置保留在私有工作区。
 
-## 进一步阅读
+**本工具库尚未指定许可证。** 使用与再分发前请向维护者确认授权；第三方软件遵守各自许可，见 [THIRD_PARTY.md](THIRD_PARTY.md)。
 
-- [协作与科学证据边界](docs/workflow.md)
-- [私有工作区结构](docs/private_workspace.md)
-- [公开边界与贡献要求](docs/publication_policy.md)
-- [依赖与第三方许可](THIRD_PARTY.md)
-
-诊断支持范围见 [逐例验证与缺口记录](docs/diagnostic-validation-scope.json)。真实非命中、XML 解析观察与独立合成分支分开记录；合成阳性不能解除真实样本门槛。当前默认 BRMIX 不变，新检测器未启用，不报告总体准确率。
-
-工作流计量字段和缺失规则见 [观察合同](docs/workflow-observation-contract.json)。墙钟、人操作时间、首次通过与机械返工分开；未测量保留空值，历史启动快照不能当作当前任务完成。没有同类可比组时不报告改善率。内部合成试用不等于外部首次使用者或节时验证。
-
-
-补充证据见 [独立 agent 试用与合成配对范围](docs/workflow-evidence-supplement.json) 和 [真实诊断观察补查](docs/diagnostic-validation-supplement.json)。五组合成配对结果一致，约1%耗时差不足以排除噪声，不证明科研节时；真实阳性、抑制与读取失败证据仍缺，检测器门槛保持。
+更多说明：[协作与证据边界](docs/workflow.md) · [公开内容与贡献要求](docs/publication_policy.md)。
