@@ -1,0 +1,10 @@
+{
+  "schema": "dft-execution-authority/v1",
+  "task_id": null,
+  "unit_id": null,
+  "execution_id": null,
+  "manifest_sha256": null,
+  "allowed_actions": [],
+  "user_confirmation": {"reference": null, "quote": null},
+  "schedule_reference": null
+}

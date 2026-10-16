@@ -1,0 +1,18 @@
+{
+  "schema": "dft-calculation-plan/v1",
+  "task_id": null,
+  "intake_ref": null,
+  "research_question": null,
+  "why_needed": null,
+  "method_rationale": null,
+  "method_evidence_refs": [],
+  "precision_and_comparability": null,
+  "interpretation_limits": null,
+  "resources": {"description": null, "basis": null},
+  "cost": {"state": "UNKNOWN", "basis": null, "wall_hours_range": null},
+  "stop_conditions": [],
+  "execution_scope": null,
+  "handoff_point": null,
+  "dependency_plan_ref": null,
+  "stages": []
+}

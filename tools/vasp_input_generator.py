@@ -9,6 +9,7 @@ validation is performed by vasp_executor.py in staging before publication.
 from __future__ import annotations
 
 import argparse
+import os
 import copy
 import hashlib
 import json
@@ -532,7 +533,7 @@ def _validate_warm_geometry_source_path(spec: Mapping[str, Any], source_root: Pa
             "Warm-restart generation requires the exact approved source POSCAR path.",
         )
     relative = PurePosixPath(str(source.get("parent_repo_path", "")))
-    project_root = Path(__file__).resolve().parents[2]
+    project_root = Path(os.environ.get("DFT_WORKSPACE_ROOT", str(Path(__file__).resolve().parent.parent))).resolve()
     declared_source = project_root.joinpath(*relative.parts).resolve()
     actual_source = (source_root / "POSCAR").resolve()
     if declared_source != actual_source:

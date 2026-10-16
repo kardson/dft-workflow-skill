@@ -1,0 +1,17 @@
+{
+  "schema": "dft-result-review/v1",
+  "task_id": null,
+  "facts_sha256": null,
+  "reviewed_by": null,
+  "answer": null,
+  "confidence_and_basis": null,
+  "comparability": null,
+  "observations": [],
+  "interpretations": [],
+  "supporting_artifacts": [],
+  "scientific_decision_ref": null,
+  "limits": null,
+  "next_action": null,
+  "next_action_reason": null,
+  "next_action_owner": null
+}

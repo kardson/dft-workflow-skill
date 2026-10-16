@@ -288,6 +288,7 @@ def _load_execution_identity(
     manifest_path: Path,
     *,
     allow_exact_quick_status_nested_batch: bool = False,
+    allow_exact_local_raw_evidence_nested_batch: bool = False,
 ) -> dict[str, Any]:
     manifest = read_json(manifest_path)
     if not isinstance(manifest, dict) or manifest.get("route") not in {None, "vasp"}:
@@ -319,6 +320,7 @@ def _load_execution_identity(
         manifest, "case", nested_sources, "case_id", "case"
     )
     exact_quick_status_nested_batch = False
+    exact_local_raw_evidence_nested_batch = False
     if not isinstance(batch, str) or not REMOTE_BATCH_RE.fullmatch(batch):
         exact_quick_status_nested_batch = (
             allow_exact_quick_status_nested_batch
@@ -326,7 +328,13 @@ def _load_execution_identity(
                 manifest, task_id, unit_id, batch, case
             )
         )
-        if not exact_quick_status_nested_batch:
+        exact_local_raw_evidence_nested_batch = (
+            allow_exact_local_raw_evidence_nested_batch
+            and _matches_local_raw_evidence_identity(
+                manifest, task_id, unit_id, batch, case
+            )
+        )
+        if not (exact_quick_status_nested_batch or exact_local_raw_evidence_nested_batch):
             raise EvidenceError("execution manifest remote_batch_dir is unsafe or missing")
     if not isinstance(case, str) or not CASE_RE.fullmatch(case) or case in {".", ".."}:
         raise EvidenceError("execution manifest case is unsafe or missing")
@@ -345,6 +353,10 @@ def _load_execution_identity(
         "case_dir" in source for _namespace, source in case_dir_sources
     ):
         raise EvidenceError("execution manifest case_dir is required for the approved nested batch")
+    if exact_local_raw_evidence_nested_batch and not any(
+        "case_dir" in source for _namespace, source in case_dir_sources
+    ):
+        raise EvidenceError("execution manifest case_dir is required for the approved raw evidence batch")
     runtime_input_dir = manifest.get("runtime_input_dir")
     if runtime_input_dir is None:
         runtime_input_dir = case_dir
@@ -358,14 +370,31 @@ def _load_execution_identity(
             "execution manifest runtime_input_dir must be the case directory "
             "or an explicitly verified batch directory"
         )
+    if exact_local_raw_evidence_nested_batch and (
+        manifest.get("runtime_input_dir") != case_dir
+        or manifest.get("runtime_input_verified") is not False
+    ):
+        raise EvidenceError(
+            "approved raw evidence batch requires the case input directory "
+            "and runtime_input_verified=false"
+        )
     if exact_quick_status_nested_batch and manifest.get("runtime_input_dir") != case_dir:
         raise EvidenceError(
             "approved nested batch requires runtime_input_dir to equal batch_dir/case_id"
         )
+    execution_id, _execution_source = _optional_manifest_identity_value(
+        manifest, "execution_id", "execution_id", "execution_id"
+    )
+    tmux_session, _tmux_source = _optional_manifest_identity_value(
+        manifest, "tmux_session", "tmux_session", "tmux_session"
+    )
     return {
+        "route": manifest.get("route"),
         "task_id": task_id,
         "unit_id": unit_id,
         "workflow_unit_id": workflow_unit if workflow_unit_present else None,
+        "execution_id": execution_id,
+        "tmux_session": tmux_session,
         "identity_sources": {
             "unit_id": (
                 "unit_id+workflow_unit_id"
@@ -385,9 +414,11 @@ def _load_execution_identity(
         "host": _host_identity(manifest),
         "remote_batch_dir": batch,
         "case": case,
+        "case_dir": case_dir,
         "remote_case_dir": case_dir,
         "remote_input_dir": runtime_input_dir,
         "runtime_input_source": runtime_input_source,
+        "runtime_input_verified": manifest.get("runtime_input_verified"),
         "manifest_path": str(manifest_path.resolve()),
     }
 
@@ -395,6 +426,20 @@ def _load_execution_identity(
 def load_execution_identity(manifest_path: Path) -> dict[str, Any]:
     """Load the shared identity contract without the quick-status-only exception."""
     return _load_execution_identity(manifest_path)
+
+
+def _load_raw_evidence_identity(manifest_path: Path | str) -> dict[str, Any]:
+    """Load identity for bounded local evidence capture/export/ingestion.
+
+    Generic one-segment batches keep the shared contract. A nested attempt is
+    accepted only when the installed private adapter matches the full reviewed
+    identity and confirms that runtime inputs come from the case directory.
+    """
+
+    return _load_execution_identity(
+        Path(manifest_path).resolve(),
+        allow_exact_local_raw_evidence_nested_batch=True,
+    )
 
 
 def _optional_manifest_identity_value(
@@ -462,6 +507,77 @@ def _matches_local_quick_status_identity(
             return False
         raise
     matcher = getattr(adapter, "matches_quick_status_identity", None)
+    return bool(callable(matcher) and matcher(identity))
+
+
+def _matches_local_raw_evidence_identity(
+    manifest: dict[str, Any],
+    task_id: str,
+    unit_id: str,
+    batch: Any,
+    case: Any,
+) -> bool:
+    try:
+        execution_id, _execution_source = _optional_manifest_identity_value(
+            manifest, "execution_id", "execution_id", "execution_id"
+        )
+        tmux_session, _tmux_source = _optional_manifest_identity_value(
+            manifest, "tmux_session", "tmux_session", "tmux_session"
+        )
+        nested_sources = _manifest_namespaces(manifest)
+        case_dir, _case_dir_source = _compatible_manifest_value(
+            manifest, "case_dir", nested_sources, "case_dir", "case_dir"
+        )
+        host = _host_identity(manifest)
+    except EvidenceError:
+        return False
+    identity = {
+        "route": manifest.get("route"),
+        "task_id": task_id,
+        "unit_id": unit_id,
+        "execution_id": execution_id,
+        "host": host,
+        "remote_batch_dir": batch,
+        "case": case,
+        "case_dir": case_dir,
+        "runtime_input_dir": manifest.get("runtime_input_dir"),
+        "runtime_input_verified": manifest.get("runtime_input_verified"),
+        "tmux_session": tmux_session,
+    }
+    return _matches_local_raw_evidence_payload(identity)
+
+
+def _matches_local_raw_evidence_bundle_identity(identity: dict[str, Any]) -> bool:
+    return _matches_local_raw_evidence_payload(
+        {
+            "route": identity.get("route"),
+            "task_id": identity.get("task_id"),
+            "unit_id": identity.get("unit_id"),
+            "execution_id": identity.get("execution_id"),
+            "host": identity.get("host"),
+            "remote_batch_dir": identity.get("remote_batch_dir"),
+            "case": identity.get("case"),
+            "case_dir": identity.get("case_dir"),
+            "runtime_input_dir": identity.get("remote_input_dir"),
+            "runtime_input_verified": identity.get("runtime_input_verified"),
+            "tmux_session": identity.get("tmux_session"),
+        }
+    )
+
+
+def _matches_local_raw_evidence_payload(identity: dict[str, Any]) -> bool:
+    module_name = (
+        f"{__package__}.progress_evidence_local_adapter"
+        if __package__
+        else "progress_evidence_local_adapter"
+    )
+    try:
+        adapter = importlib.import_module(module_name)
+    except ModuleNotFoundError as exc:
+        if exc.name == module_name:
+            return False
+        raise
+    matcher = getattr(adapter, "matches_raw_evidence_identity", None)
     return bool(callable(matcher) and matcher(identity))
 
 
@@ -1391,7 +1507,7 @@ def capture_bundle(
     source_root = Path(source_dir).resolve()
     if not task_root.is_dir() or not source_root.is_dir():
         raise EvidenceError("task_dir and source_dir must be existing directories")
-    identity = load_execution_identity(manifest)
+    identity = _load_raw_evidence_identity(manifest)
     if capture_metadata_path is None:
         capture_meta: dict[str, Any] = {}
     else:
@@ -1879,7 +1995,9 @@ def verify_bundle(bundle_dir: Path | str) -> dict[str, Any]:
         issues.append("manifest-derived identity is missing")
         identity = {}
     else:
-        if not isinstance(identity.get("remote_batch_dir"), str) or not REMOTE_BATCH_RE.fullmatch(identity.get("remote_batch_dir", "")):
+        batch = identity.get("remote_batch_dir")
+        batch_is_generic = isinstance(batch, str) and REMOTE_BATCH_RE.fullmatch(batch)
+        if not batch_is_generic and not _matches_local_raw_evidence_bundle_identity(identity):
             issues.append("manifest-derived remote_batch_dir is invalid")
         case = identity.get("case")
         if not isinstance(case, str) or not CASE_RE.fullmatch(case or "") or case in {".", ".."}:
@@ -1905,7 +2023,7 @@ def verify_bundle(bundle_dir: Path | str) -> dict[str, Any]:
         manifest_source = identity.get("manifest_path")
         if isinstance(manifest_source, str) and Path(manifest_source).is_file():
             try:
-                manifest_identity = load_execution_identity(Path(manifest_source))
+                manifest_identity = _load_raw_evidence_identity(Path(manifest_source))
             except EvidenceError as error:
                 issues.append(f"manifest identity cannot be reloaded: {error}")
             else:
@@ -1914,11 +2032,16 @@ def verify_bundle(bundle_dir: Path | str) -> dict[str, Any]:
                     "unit_id",
                     "workflow_unit_id",
                     "identity_sources",
+                    "route",
                     "remote_batch_dir",
                     "case",
+                    "case_dir",
                     "remote_case_dir",
                     "remote_input_dir",
                     "runtime_input_source",
+                    "runtime_input_verified",
+                    "execution_id",
+                    "tmux_session",
                     "host",
                 ):
                     if key in identity and identity.get(key) != manifest_identity.get(key):
@@ -2486,7 +2609,7 @@ def build_remote_export_script(manifest_path: Path | str) -> str:
     be unit-tested without opening SSH.
     """
 
-    identity = load_execution_identity(Path(manifest_path).resolve())
+    identity = _load_raw_evidence_identity(manifest_path)
     encoded = json.dumps(identity, ensure_ascii=False, separators=(",", ":"))
     return f'''#!/usr/bin/env python3
 import base64, json, os, re, sys
@@ -2947,7 +3070,7 @@ def ingest_export(
 
     task_root = Path(task_dir).resolve()
     manifest = Path(manifest_path).resolve()
-    identity = load_execution_identity(manifest)
+    identity = _load_raw_evidence_identity(manifest)
     lines = stream
     frames: list[dict[str, Any]] = []
     start_frame: dict[str, Any] | None = None

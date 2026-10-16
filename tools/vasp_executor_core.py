@@ -69,6 +69,7 @@ def is_rmm_performance_diagnostic(manifest, *, profile_policy=GENERIC_PROFILE_PO
 def is_approved_warm_rmm_relaxation(manifest, *, profile_policy=GENERIC_PROFILE_POLICY):
     return profile_policy.is_warm_relaxation(manifest)
 
+
 def performance_diagnostic_spec_errors(manifest, *, profile_policy=GENERIC_PROFILE_POLICY):
     return profile_policy.diagnostic_errors(manifest)
 
@@ -588,7 +589,10 @@ def _manifest_support_errors(manifest: Mapping[str, Any], *, profile_policy=GENE
     if type(incar.get("ISPIN")) is not int or incar.get("ISPIN") not in (1, 2):
         errors.append(_issue("UNSUPPORTED_ISPIN", "Supported task form requires ISPIN 1 or 2."))
     if type(incar.get("LREAL")) is not bool and not (
-        incar.get("LREAL") == "Auto" and (is_performance_diagnostic(manifest, profile_policy=profile_policy) or is_approved_warm_rmm_relaxation(manifest, profile_policy=profile_policy))
+        incar.get("LREAL") == "Auto" and (
+            is_performance_diagnostic(manifest, profile_policy=profile_policy)
+            or is_approved_warm_rmm_relaxation(manifest, profile_policy=profile_policy)
+        )
     ):
         errors.append(_issue(
             "INVALID_LREAL_SPEC",

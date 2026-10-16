@@ -1,0 +1,11 @@
+{
+  "schema": "dft-plan-approval/v1",
+  "task_id": null,
+  "stage_id": null,
+  "plan_sha256": null,
+  "approved_manifest_sha256": null,
+  "scientific_decision_ref": null,
+  "user_confirmation": {"reference": null, "quote": null},
+  "runtime_contract_ref": null,
+  "runtime_contract_sha256": null
+}

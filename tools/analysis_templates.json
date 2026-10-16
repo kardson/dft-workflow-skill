@@ -1,0 +1,10 @@
+{
+  "schema": "dft-analysis-templates/v1",
+  "templates": {
+    "static": {"checks": ["actual_inputs_and_output_settings", "electronic_convergence", "fixed_geometry", "reference_and_energy_convention"], "ionic_convergence_required": false, "optional_tools": ["reference", "total-dos", "hdf5", "diagnose"]},
+    "atomref": {"checks": ["actual_inputs_and_output_settings", "electronic_convergence", "atomic_spin_state", "reference_and_energy_convention"], "ionic_convergence_required": false, "optional_tools": ["reference", "diagnose"]},
+    "relax_fresh": {"checks": ["actual_inputs_and_output_settings", "electronic_convergence", "ionic_convergence", "free_atom_forces", "constraints_and_cell"], "ionic_convergence_required": true, "optional_tools": ["geometry", "diagnose"]},
+    "relax_warm": {"checks": ["actual_inputs_and_output_settings", "electronic_convergence", "ionic_convergence", "free_atom_forces", "constraints_and_cell", "actual_restart_identity"], "ionic_convergence_required": true, "optional_tools": ["geometry", "diagnose"]}
+  },
+  "policy": "Run only analyses needed by the approved question. Explicit references/windows required; no automatic vacuum choice, spin/PDOS/bands acceptance or scientific release."
+}

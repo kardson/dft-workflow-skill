@@ -1,0 +1,34 @@
+{
+  "schema": "dft-plan-templates/v1",
+  "scope": "Existing validated zero-field fixed-cell workflow; no universal numeric defaults",
+  "templates": {
+    "static": {
+      "purpose": "Fresh fixed-geometry static energy or reference",
+      "required_choices": ["geometry", "functional", "paw", "basis_and_mesh", "electronic_precision", "spin", "smearing", "energy_reference"],
+      "required_checks": ["electronic_convergence", "fixed_geometry", "comparable_reference"],
+      "expected_outputs": ["actual_inputs", "OUTCAR", "OSZICAR", "vasprun.xml"],
+      "restart_contract": "explicit fresh"
+    },
+    "atomref": {
+      "purpose": "Approved isolated-atom reference",
+      "required_choices": ["geometry", "functional", "paw", "basis_and_mesh", "electronic_precision", "spin", "smearing", "atomic_reference_state", "energy_reference"],
+      "required_checks": ["electronic_convergence", "reference_identity", "comparable_reference"],
+      "expected_outputs": ["actual_inputs", "OUTCAR", "OSZICAR", "vasprun.xml"],
+      "restart_contract": "explicit fresh"
+    },
+    "relax_fresh": {
+      "purpose": "Fresh fixed-cell relaxation",
+      "required_choices": ["geometry", "functional", "paw", "basis_and_mesh", "electronic_precision", "spin", "smearing", "atomic_constraints", "ionic_precision"],
+      "required_checks": ["electronic_convergence", "ionic_convergence", "constraints_and_cell"],
+      "expected_outputs": ["actual_inputs", "OUTCAR", "OSZICAR", "vasprun.xml", "CONTCAR"],
+      "restart_contract": "explicit fresh"
+    },
+    "relax_warm": {
+      "purpose": "Compatible wavefunction-and-charge SCF fixed-cell relaxation",
+      "required_choices": ["geometry", "functional", "paw", "basis_and_mesh", "electronic_precision", "spin", "smearing", "atomic_constraints", "ionic_precision", "restart_source_and_compatibility"],
+      "required_checks": ["electronic_convergence", "ionic_convergence", "constraints_and_cell", "actual_restart_compatibility"],
+      "expected_outputs": ["actual_inputs", "OUTCAR", "OSZICAR", "vasprun.xml", "CONTCAR"],
+      "restart_contract": "explicit approved compatible wavefunction and charge source; no fallback to fresh"
+    }
+  }
+}

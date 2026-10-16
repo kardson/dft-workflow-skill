@@ -1,0 +1,12 @@
+{
+  "schema": "dft-research-intake/v1",
+  "task_id": null,
+  "question_fields": {
+    "research_object": {"state": "UNRESOLVED", "value": null, "question_to_user": "请说明研究对象。"},
+    "research_question": {"state": "UNRESOLVED", "value": null, "question_to_user": "希望回答什么具体问题？"},
+    "conditions": {"state": "UNRESOLVED", "value": null, "question_to_user": "需要比较哪些情况，有哪些已确定条件？"},
+    "scope": {"state": "UNRESOLVED", "value": null, "question_to_user": "请确认本次研究范围及暂不讨论的内容。"}
+  },
+  "materials": [],
+  "evidence_gap": {"summary": null, "new_calculation": "UNDECIDED", "basis": null}
+}
