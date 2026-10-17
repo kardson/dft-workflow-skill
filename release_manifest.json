@@ -16,11 +16,11 @@
     },
     {
       "path": "README.md",
-      "sha256": "3595c2cb4c5638acdc21f4a643a21504fb910e2900c7d33825b5329edf624db7"
+      "sha256": "d5a5273afb7014f3f030b99f380963cd265c22b03bf1e57048a79ec65de9c3fa"
     },
     {
       "path": "SKILL.md",
-      "sha256": "930300520a76c3233508e351b757691cc6facd311c3149f8d06c82e948ca60b2"
+      "sha256": "fe4b840a288d6982fc4b070ddacbb7197289bf29f189f8603f69c1256a71755d"
     },
     {
       "path": "THIRD_PARTY.md",
@@ -40,7 +40,11 @@
     },
     {
       "path": "docs/capabilities.md",
-      "sha256": "329b3aa4bfeae2d4aae431581cb65996824a01c56a25dc86d061f87848c0f95b"
+      "sha256": "1281963f799994ca347a8264dee2a14e3eed537826b8a4843f4cdb24a93d5e12"
+    },
+    {
+      "path": "docs/collaboration_modes.md",
+      "sha256": "b9313e1cbe9d5962989ae61003edd9ed5d34a4c1ddaf8fa75f98639251103321"
     },
     {
       "path": "docs/compatibility-clean-science.json",
@@ -60,7 +64,7 @@
     },
     {
       "path": "docs/getting_started.md",
-      "sha256": "dbf60c8a34aa1c08a7fe78e4ae45a913ec25fa7718cad2d5947b0a835e80e6f3"
+      "sha256": "35fea03083c350ab63e313462f18e24f4c8058549f2c2dc64dbee8145022f40c"
     },
     {
       "path": "docs/private_workspace.md",
@@ -76,7 +80,7 @@
     },
     {
       "path": "docs/skill_installation.md",
-      "sha256": "d65ca7361ea2232a80ec9723b28a0a5b36122d581fe0814b5352fc645ba6b7e0"
+      "sha256": "8342ac8edd6d79af1706c47744e6bf7dc8d880249aa762266bd054f2951a8d9b"
     },
     {
       "path": "docs/standard_workflow.md",

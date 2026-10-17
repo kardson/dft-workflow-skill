@@ -10,6 +10,8 @@
 
 首次可请 agent：“把这个研究项目接入 vasp-dft-workflow，今后 VASP 相关任务默认使用它。”接入后无需每次指定技能名。
 
+协作方式可选 **单 agent / 按需 subagent / 固定双线程**，首次选择后沿用。[选择协作方式](docs/collaboration_modes.md)。
+
 详细安装方式见[skill 安装说明](docs/skill_installation.md)。
 
 ![DFT Workflow Toolkit：从研究问题到可追溯证据，连接科研人员、AI agent 与 VASP 工作站](docs/assets/workflow-banner.svg)

@@ -13,6 +13,10 @@ Help the researcher express the scientific goal in natural language while you ha
 
 When first used in a selected research workspace, read [project connection](docs/skill_installation.md#首次项目接入与自动使用). Check existing project instructions for an equivalent rule. If absent, show the proposed project-local default-routing block and obtain permission to merge it into that workspace's AGENTS.md, unless the user has already authorized that concrete change. Installation alone is not authorization to edit a research project. Preserve all existing rules; never rewrite or duplicate the file or change unrelated routes. If permission is declined or the file is read-only, continue the requested work without persisting a rule. Once connected, reuse the rule without asking again. Simple progress queries must not be delayed by onboarding.
 
+## Collaboration mode
+
+At project connection, read [collaboration modes](docs/collaboration_modes.md). Reuse the project's existing explicit mode and scientific roles; otherwise ask once whether to use single-agent, on-demand subagents, or a persistent coordinator/executor pair. Persist the actual choice in the project's existing instructions within granted edit authorization. Model preferences are separate and host-dependent. Do not delegate or create/message threads merely because the host supports them. Use bounded task packets and one writer per active unit; switch only after an explicit handoff. Simple requests stay lightweight in every mode.
+
 ## Route each request
 
 - For a progress question, use only the one-time, read-only progress route described in [the run and delivery guide](docs/capabilities.md#运行与交付节奏). Do not start polling or background monitoring.
