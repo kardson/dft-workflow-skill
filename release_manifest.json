@@ -16,7 +16,7 @@
     },
     {
       "path": "README.md",
-      "sha256": "208a84edb0620e6030f03f449de3ebe5e104662a8d10df5124678ed0ba4847cc"
+      "sha256": "b6d9e16161a5fd1bfeeb0450371382f93873859683d278e48fa072c793764d51"
     },
     {
       "path": "THIRD_PARTY.md",
@@ -25,6 +25,14 @@
     {
       "path": "constraints-science.txt",
       "sha256": "4c4564236ff723091fe8afbe21672085ac8d13ec6ebe03a395d2a231983028c0"
+    },
+    {
+      "path": "docs/assets/workflow-banner.svg",
+      "sha256": "54b1a1cae46e42f14974f1587b01f1ed532036f7b6767f5e04236e0bcee9558b"
+    },
+    {
+      "path": "docs/capabilities.md",
+      "sha256": "329b3aa4bfeae2d4aae431581cb65996824a01c56a25dc86d061f87848c0f95b"
     },
     {
       "path": "docs/compatibility-clean-science.json",
@@ -41,6 +49,10 @@
     {
       "path": "docs/evidence-verifier.md",
       "sha256": "73dfd24950f21ba443592211c7fd0659bf6a08b5753d66f34288695efc2964a4"
+    },
+    {
+      "path": "docs/getting_started.md",
+      "sha256": "dbf60c8a34aa1c08a7fe78e4ae45a913ec25fa7718cad2d5947b0a835e80e6f3"
     },
     {
       "path": "docs/private_workspace.md",

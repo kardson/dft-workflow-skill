@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="340" viewBox="0 0 1200 340" role="img" aria-labelledby="title desc">
+<title id="title">DFT Workflow Toolkit</title><desc id="desc">Researcher, AI agent and VASP workstation collaborate from research questions to traceable evidence.</desc>
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#101d38"/><stop offset="1" stop-color="#17394a"/></linearGradient><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8" fill="#55d7bc"/></marker></defs>
+<rect width="1200" height="340" rx="24" fill="url(#bg)"/>
+<g fill="none" stroke="#396078" opacity=".4"><path d="M900 0L1200 180M800 0L1200 240M700 0L1200 300M1000 0L1200 120"/><circle cx="1110" cy="80" r="95"/><circle cx="1110" cy="80" r="135"/></g>
+<g font-family="Segoe UI,Arial,sans-serif"><text x="48" y="51" fill="#65e4cb" font-size="14" letter-spacing="3">AGENT-ASSISTED VASP RESEARCH</text><text x="48" y="106" fill="#fff" font-size="38" font-weight="700">From questions to traceable evidence.</text><text x="48" y="144" fill="#bacddd" font-size="18">You define the science. Your agent helps carry the workflow.</text>
+<rect x="48" y="194" width="310" height="100" rx="14" fill="#203454" stroke="#5274d9"/><text x="70" y="232" fill="#fff" font-size="22" font-weight="600">Researcher</text><text x="70" y="266" fill="#c3d0e8" font-size="16">Question · Plan approval · Judgment</text>
+<rect x="445" y="194" width="310" height="100" rx="14" fill="#302f50" stroke="#a293e8"/><text x="467" y="232" fill="#fff" font-size="22" font-weight="600">AI agent</text><text x="467" y="266" fill="#d6ceef" font-size="16">Plan · Prepare · Check · Interpret</text>
+<rect x="842" y="194" width="310" height="100" rx="14" fill="#153f44" stroke="#55d7bc"/><text x="864" y="232" fill="#fff" font-size="22" font-weight="600">VASP workstation</text><text x="864" y="266" fill="#b9e4dc" font-size="16">Compute · Record · Preserve</text></g>
+<path d="M374 244H427M771 244H824" stroke="#55d7bc" stroke-width="2" marker-end="url(#arrow)"/>
+</svg>
