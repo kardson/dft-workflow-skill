@@ -1,0 +1,4 @@
+interface:
+  display_name: "VASP DFT Workflow"
+  short_description: "Guide VASP tasks with evidence and clear approvals"
+  default_prompt: "Use $vasp-dft-workflow to help plan, prepare, or review a VASP calculation."

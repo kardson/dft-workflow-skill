@@ -16,11 +16,19 @@
     },
     {
       "path": "README.md",
-      "sha256": "b6d9e16161a5fd1bfeeb0450371382f93873859683d278e48fa072c793764d51"
+      "sha256": "2788f1fa25c69a114e48327d2f8742f3f387a6dfdee38c9a1f84f11c2405bb6d"
+    },
+    {
+      "path": "SKILL.md",
+      "sha256": "e89a8facf2c33ed48a78f247324cfdffd008773b5dcd21e6946d5159a94bb1fc"
     },
     {
       "path": "THIRD_PARTY.md",
       "sha256": "b7a8facbcde0d178a11f27695bb82e559ceb6980b516d75cc913217aed854750"
+    },
+    {
+      "path": "agents/openai.yaml",
+      "sha256": "471502014cbaac197efa6404f64d186d9d227c6b9feac32b323249a0f3eb70b0"
     },
     {
       "path": "constraints-science.txt",
@@ -65,6 +73,10 @@
     {
       "path": "docs/reproduce-clean-science.md",
       "sha256": "ed51c2cf754240ce0dfa3f75e73eeb415bcea69d4d4815ef8ba39fd9f14b82ee"
+    },
+    {
+      "path": "docs/skill_installation.md",
+      "sha256": "724c29762df2a915871a41146ae18741a766121ab3832577d08fb7601b68b408"
     },
     {
       "path": "docs/standard_workflow.md",
