@@ -16,11 +16,11 @@
     },
     {
       "path": "README.md",
-      "sha256": "2788f1fa25c69a114e48327d2f8742f3f387a6dfdee38c9a1f84f11c2405bb6d"
+      "sha256": "3595c2cb4c5638acdc21f4a643a21504fb910e2900c7d33825b5329edf624db7"
     },
     {
       "path": "SKILL.md",
-      "sha256": "e89a8facf2c33ed48a78f247324cfdffd008773b5dcd21e6946d5159a94bb1fc"
+      "sha256": "930300520a76c3233508e351b757691cc6facd311c3149f8d06c82e948ca60b2"
     },
     {
       "path": "THIRD_PARTY.md",
@@ -28,7 +28,7 @@
     },
     {
       "path": "agents/openai.yaml",
-      "sha256": "471502014cbaac197efa6404f64d186d9d227c6b9feac32b323249a0f3eb70b0"
+      "sha256": "16d2134a54ae45b6450df81ed1186f505ba93ebbe6b7a996162793f53fef97e7"
     },
     {
       "path": "constraints-science.txt",
@@ -76,7 +76,7 @@
     },
     {
       "path": "docs/skill_installation.md",
-      "sha256": "724c29762df2a915871a41146ae18741a766121ab3832577d08fb7601b68b408"
+      "sha256": "d65ca7361ea2232a80ec9723b28a0a5b36122d581fe0814b5352fc645ba6b7e0"
     },
     {
       "path": "docs/standard_workflow.md",

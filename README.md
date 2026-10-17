@@ -6,7 +6,9 @@
 
 安装：请从 [GitHub](https://github.com/kardson/dft-workflow-toolkit) 安装 `vasp-dft-workflow` skill。
 
-使用：`使用 $vasp-dft-workflow，帮我比较两种结构的稳定性，先核对环境和材料，再讨论计算方案。`
+使用：直接告诉 agent：“帮我比较两种结构的稳定性，先核对环境和材料，再讨论计算方案。”
+
+首次可请 agent：“把这个研究项目接入 vasp-dft-workflow，今后 VASP 相关任务默认使用它。”接入后无需每次指定技能名。
 
 详细安装方式见[skill 安装说明](docs/skill_installation.md)。
 

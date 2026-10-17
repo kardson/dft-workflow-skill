@@ -19,3 +19,27 @@ name: vasp-dft-workflow
 ## 运行要求
 
 Skill 本身不包含 VASP、赝势、计算资源或所有 Python 依赖。真实运行需要用户自己的合法 VASP 部署、适用输入、计算资源、部署适配和相关依赖。请先由 agent 核验实际环境；skill 和公开工具帮助管理流程与证据，不保证计算收敛或科学结论正确。
+
+## 首次项目接入与自动使用
+
+安装后，支持自动技能选择的 agent 可以根据 VASP 需求识别本技能，无需每次点名；具体选择仍取决于宿主 agent。为稳定使用，可说：
+
+> 请把这个研究项目接入 vasp-dft-workflow，今后 VASP 相关任务默认使用它，保留已有项目规则。
+
+Agent 先确认工作区并读取已有 AGENTS.md。已有等效规则就复用；否则展示拟加入内容，在获得该项目文件的修改授权后追加以下独立段落。用户上述接入请求已明确授权时不重复确认。无文件时创建；文件只读、规则冲突或用户拒绝时说明情况，继续当前任务，不强行修改。不要改个人全局规则或其他项目。
+
+```markdown
+## VASP workflow skill
+
+For VASP research tasks in this project, use the installed
+`vasp-dft-workflow` skill automatically without requiring the user to name it.
+Locate and read its SKILL.md through the host's installed skill catalog.
+Enter at the relevant step; a progress request uses the one-time read-only
+status route and does not restart the full workflow. Preserve existing
+scientific ownership, project rules and execution authorization boundaries.
+Do not apply this routing to unrelated tasks. If the skill is unavailable,
+report the gap and follow existing project instructions without claiming
+that the skill was loaded.
+```
+
+合并前后检查原有内容保留、段落只出现一次。项目接入不授予计算、远端写入或持续监控权限。更新或移动 skill 后通过技能目录定位，不在项目规则写死某台机器的安装路径。
