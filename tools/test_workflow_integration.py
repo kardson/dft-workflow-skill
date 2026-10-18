@@ -15,6 +15,8 @@ import planning
 import preparation
 import recovery
 import static_status_binding
+from task_checkpoint import checkpoint
+from task_resume import resume
 from test_environment_check import runtime_directory
 from test_intake import request
 from test_preparation import fixture, TOOLS
@@ -45,6 +47,8 @@ class WorkflowIntegrationTests(unittest.TestCase):
             self.assertEqual(checked['candidate_output_requirements_sha256'], analysis.digest(candidate / 'output_requirements.json'))
             prepared = root / 'preparation.json'
             prepared.write_text(json.dumps(checked), encoding='utf-8')
+            checkpoint(prepared, root, plan['task_id'], 'synthetic-executor', root / 'continue-prepared.json')
+            self.assertEqual(resume(root / 'continue-prepared.json', root)['next_action'], 'VERIFY_EXECUTION_AUTHORITY')
 
             static_status_binding.build(candidate, prepared, TOOLS, root / 'status-binding')
             manifest = root / 'status-binding/status_manifest.json'
@@ -76,6 +80,8 @@ class WorkflowIntegrationTests(unittest.TestCase):
                                 'payload': root / 'payload.json', 'tool-root': TOOLS, 'output-dir': root / 'returned'}.items():
                 args += ['--' + name, str(value)]
             self.assertEqual(recovery.main(args), 0)
+            checkpoint(root / 'returned/recovery_handoff.json', root, plan['task_id'], 'synthetic-executor', root / 'continue-recovered.json')
+            self.assertEqual(resume(root / 'continue-recovered.json', root)['next_action'], 'VERIFY_ANALYSIS_BINDINGS')
             facts = analysis.parse(root / 'returned/recovery_handoff.json', plan_path, 'static1',
                 candidate / 'input_manifest.json', candidate / 'output_requirements.json', root, TOOLS,
                 os.environ.get('DFT_SCIENCE_PYTHON', sys.executable), root / 'analysis', preparation=prepared)
@@ -104,6 +110,14 @@ class WorkflowIntegrationTests(unittest.TestCase):
             delivery = analysis.render(root / 'analysis/facts.json', review_path, root, root / 'delivery', root / 'current_task.md')
             self.assertFalse(delivery['new_calculation_authorized'])
             self.assertIn('PARTIAL', (root / 'current_task.md').read_text(encoding='utf-8'))
+            checkpoint(root / 'analysis/facts.json', root, plan['task_id'], 'synthetic-executor', root / 'continue-analyzed.json')
+            self.assertEqual(resume(root / 'continue-analyzed.json', root)['next_action'], 'SCIENTIFIC_REVIEW')
+            recovered_record=json.loads((root / 'returned/recovery_handoff.json').read_text(encoding='utf-8'))
+            raw=Path(recovered_record['files']['OUTCAR']['path'])
+            raw.write_bytes(b'changed after delivery')
+            self.assertEqual(resume(root / 'continue-recovered.json', root)['status'], 'BLOCKED')
+            self.assertEqual(resume(root / 'continue-analyzed.json', root)['status'], 'BLOCKED')
+
 
 
 if __name__ == '__main__':

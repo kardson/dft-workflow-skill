@@ -154,6 +154,8 @@ def parse(recovery_path, plan_path, stage_id, approved, requirements, workspace,
         warnings.append("XML 结果不完整或解析失败，不能由备用解析补作完整收敛结论。")
     if checked.get("passed") is not True:
         warnings.append("实际输入/设置、运行结束或输出契约检查存在缺口，查看 postcheck 依据。")
+    if checked.get('parameter_comparison',{}).get('status') != 'MATCH':
+        warnings.append('实际参数对照未完全匹配，须核对 parameter_comparison 的逐项依据，不能以机械检查通过代替参数一致性。')
     for name in ("parse_error", "oszicar_error", "outcar_error"):
         if summary.get(name):
             warnings.append(name + ": " + str(summary[name]))
@@ -336,6 +338,14 @@ def main(argv=None):
         result = parse(args.recovery, args.plan, args.stage_id, args.approved_manifest, args.requirements,
                        args.workspace, args.tool_root, args.python, args.output_dir, preparation=args.preparation)
         print(json.dumps({"parser_status": result["observations"]["parser_status"], "backend_status": result["backend_status"], "interpretation": result["interpretation"]}))
+        if result["backend_status"] != "SUCCEEDED" or result["observations"]["parser_status"] != "COMPLETE_XML":
+            from issue_report import write_issue
+            failed = result["backend_status"] != "SUCCEEDED"
+            write_issue(args.output_dir, result.get("task_id"), "FAILED" if failed else "PARTIAL",
+                        ["分析后端未成功运行" if failed else "输出未达到完整 XML 解析状态"],
+                        "不能交付完整科学结论；后端失败不能当作已分析结果。",
+                        "核对原始输出、后端记录与依赖；部分结果保留其适用限制。",
+                        "需要补充输出或新增计算时请研究者确认。", ["facts.json"])
         if result["backend_status"] != "SUCCEEDED":
             return 1
     else:

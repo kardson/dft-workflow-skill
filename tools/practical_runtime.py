@@ -175,9 +175,44 @@ def verify_case_receipt(case,plan):
         raise ValueError('Fresh case contains a restart copy declaration')
     return receipt
 
+def bounded_validation(plan):
+    policy=plan['environment'].get('bounded_validation')
+    if policy is None: return None
+    if (policy.get('schema')!='vasp-bounded-validation/v1'
+            or any(policy.get(key)!=plan.get(key) for key in ('task_id','unit_id','remote_batch_dir'))
+            or plan['parallel']!={'mpi_ranks':1,'kpar':1,'ncore':1,'omp_num_threads':1}
+            or type(policy.get('cpu'))is not int or policy['cpu']<0
+            or policy.get('cpu_quota_percent')!=10 or policy.get('memory_max_bytes')!=2147483648
+            or policy.get('wall_seconds')!=600 or policy.get('stop_grace_seconds')!=30
+            or policy.get('nice')!=19 or not policy.get('authorization_ref')):
+        raise ValueError('Invalid explicitly approved bounded validation profile')
+    import re
+    if not re.fullmatch(r'workflow-validation-[a-z0-9-]+',policy.get('service_unit','')):
+        raise ValueError('Dedicated test service identity required')
+    return policy
+
+
+def verify_bounded_context(plan):
+    policy=bounded_validation(plan)
+    if policy is None:return False
+    relative=Path('/proc/self/cgroup').read_text().strip().split('::',1)[1]
+    if not relative.endswith('/'+policy['service_unit']+'.service'):
+        raise ValueError('Test must run inside its dedicated resource-limited service')
+    root=Path('/sys/fs/cgroup'+relative)
+    if (root/'cpu.max').read_text().split()!=['10000','100000'] or int((root/'memory.max').read_text())!=2147483648:
+        raise ValueError('Actual cgroup quota differs from approved limits')
+    if os.sched_getaffinity(0)!={policy['cpu']} or os.getpriority(os.PRIO_PROCESS,0)!=19:
+        raise ValueError('Actual affinity/priority differs from approved limits')
+    properties=subprocess.run(['systemctl','--user','show',policy['service_unit']+'.service','-p','RuntimeMaxUSec','-p','TimeoutStopUSec','-p','KillMode'],capture_output=True,text=True,check=True,timeout=10)
+    fields=dict(line.split('=',1) for line in properties.stdout.splitlines() if '=' in line)
+    if fields.get('RuntimeMaxUSec')!='10min' or fields.get('TimeoutStopUSec')!='30s' or fields.get('KillMode')!='control-group':
+        raise ValueError('Service lifetime/group termination differs from approval')
+    return True
+
+
 def runtime_environment(plan):
     profile=plan['environment'];env=dict(os.environ)
-    env['OMP_NUM_THREADS']='1'
+    for thread_var in ('OMP_NUM_THREADS','OPENBLAS_NUM_THREADS','MKL_NUM_THREADS','BLIS_NUM_THREADS'):env[thread_var]='1'
     env['LD_LIBRARY_PATH']=':'.join(profile['ld_library_path'])
     for key in ('vasp_bin','mpi_launcher','tmux_bin'):
         regular(profile[key])
@@ -198,7 +233,8 @@ def runtime_environment(plan):
         physical.add((int((topology/'physical_package_id').read_text()),int((topology/'core_id').read_text())))
     if len(physical)<plan['parallel']['mpi_ranks']: raise ValueError('Insufficient allowed physical cores')
     processes=subprocess.run(['ps','-eo','comm='],capture_output=True,text=True,check=True,timeout=15)
-    if any(x.strip() in ('vasp_std','vasp_gam','vasp_ncl','mpirun','prterun','orterun') for x in processes.stdout.splitlines()):
+    bounded=verify_bounded_context(plan)
+    if not bounded and any(x.strip() in ('vasp_std','vasp_gam','vasp_ncl','mpirun','prterun','orterun') for x in processes.stdout.splitlines()):
         raise ValueError('Another VASP/MPI process is active')
     return env
 
@@ -217,7 +253,8 @@ def launch_once(argv,case,plan,env,process_runner=None,on_locked=None):
         # Raw failures remain failures; there is no retry or recovery here.
         with (case/'run_timing.txt').open('x') as timing:
             timing.write(f'unit_id={plan["unit_id"]}\ntask_id={plan["task_id"]}\nexecution_id={plan["execution_id"]}\n')
-            timing.write(f'case_dir={case}\nstart_epoch={started}\nend_epoch={time.time()}\nexit_code={result.returncode if result is not None else 255}\n')
+            timing.write(f'case_dir={case}\ncase_id={plan["case"]}\nstart_epoch={started}\nend_epoch={time.time()}\nexit_code={result.returncode if result is not None else 255}\n')
+            timing.write(f'start_utc={datetime.fromtimestamp(started,timezone.utc).isoformat()}\nend_utc={stamp()}\n')
 
 def run(package):
     package=Path(package).absolute()
@@ -258,6 +295,8 @@ def execute_case(package,case,plan,env,process_runner=None):
         return result
     save(case/'postcheck.json',result)
     status.update(status='COMPLETED_PENDING_REVIEW' if result['passed'] else 'FAILED_OR_INCOMPLETE',observed_utc=stamp())
+    with (case/'run_timing.txt').open('a') as timing:
+        timing.write('status='+status['status']+'\n')
     save(case/'execution_receipt.json',dict(status,mpi_launcher=argv,scientific_acceptance='NOT_AUTHORIZED',program_exit=result['program_exit']))
     return result
 

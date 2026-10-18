@@ -74,7 +74,8 @@ members=[{**row,'content':base64.b64decode(row['content_b64'],validate=True)} fo
          if row['name'] in PRIMARY_INPUTS+OUTPUT_ROLES+('status.json','run_timing.txt')]
 frames=_frames_for_payload(identity,members,{row['name']:row for row in members},payload['observed_start_utc'],payload['observed_end_utc'])
 bundle=ingest_export(frames,Path(sys.argv[3]),sys.argv[4],snapshot_name='terminal-raw',source_mode='authorized-terminal-export',
-                    command_mode='external-authorized-read-only-transport',command_argv=['external-authorized-transport'],command_exit_code=0)
+                    command_mode='external-authorized-read-only-transport',command_argv=['external-authorized-transport'],command_exit_code=0,
+                    purpose='authorized_terminal_full_outputs' if sys.argv[5] else None,preparation_path=sys.argv[5] or None)
 document=json.loads((bundle/'evidence.json').read_text(encoding='utf-8'))
 print(json.dumps({'bundle':str(bundle),'collection_status':document['collection']['status']}))
 '''
@@ -145,8 +146,12 @@ def main(argv=None):
     parser.add_argument("--max-total-bytes", required=True, type=int)
     parser.add_argument("--payload", type=Path)
     parser.add_argument("--transport-exit-code", type=int)
+    parser.add_argument('--full-outputs',action='store_true',help='Explicit approved complete terminal OUTCAR policy; requires preparation')
+    parser.add_argument('--preparation',type=Path,help='Original exact preparation handoff for complete terminal outputs')
     parser.add_argument("--python", type=Path, default=Path(sys.executable))
     args = parser.parse_args(argv)
+    if args.full_outputs and not args.preparation:
+        parser.error('--full-outputs requires original --preparation')
     if args.output_dir.exists() or args.max_total_bytes <= 0:
         parser.error("Use a new output and positive explicit transfer budget")
     child = subprocess.run([str(args.python), "-B", "-c", IDENTITY, str(args.tool_root.resolve()), str(args.manifest.resolve())], capture_output=True, text=True, timeout=10, check=True)
@@ -178,7 +183,7 @@ def main(argv=None):
     retained = args.output_dir / "returned_payload.json"
     retained.write_bytes(payload_raw)
     child = subprocess.run([str(args.python), "-B", "-c", IMPORT, str(args.tool_root.resolve()), str(retained.resolve()),
-                            str(args.output_dir.resolve()), str(args.manifest.resolve())], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=45, check=True)
+                            str(args.output_dir.resolve()), str(args.manifest.resolve()), str(args.preparation.resolve()) if args.full_outputs else ''], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=45, check=True)
     imported = json.loads(child.stdout)
     if imported["collection_status"] != "COMPLETE":
         raise ValueError("Existing evidence importer reported collection failures")
@@ -210,6 +215,12 @@ def main(argv=None):
     result["additional_metadata"] = sorted(set(rows) & set(EXTRA_METADATA))
     (args.output_dir / "recovery_handoff.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     (args.output_dir / "README.md").write_text("# 原始输出回收交付\n\n状态：" + result["status"] + "\n\n缺失：" + json.dumps(missing) + "\n\n原始证据与解析用副本已保存，仍需分析收敛及科学用途。\n", encoding="utf-8")
+    if missing or result.get("declared_outputs_missing"):
+        from issue_report import write_issue
+        write_issue(args.output_dir, expected.get("task_id"), "PARTIAL",
+                    ["缺少输出：" + ", ".join(sorted(set(missing + (result.get("declared_outputs_missing") or []))))],
+                    "回收证据不完整，不代表计算收敛或科学接受。", "核对回收清单与原工作站终态证据，不自动补算。",
+                    "额外传输或补算超出原授权时由用户决定。", ["recovery_handoff.json"])
     print(json.dumps({"status": result["status"], "missing": missing, "scientific_acceptance": "NOT_EVALUATED"}))
     return 0
 

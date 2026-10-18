@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import binascii
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -614,6 +615,7 @@ def build_quick_status_script(manifest_path: Path | str) -> str:
     """Render a one-shot, read-only remote status/tail probe for one manifest."""
 
     identity = _load_quick_status_identity(manifest_path)
+    bounded = read_json(Path(manifest_path)).get('environment', {}).get('bounded_validation')
     remote_identity = {
         "task_id": identity["task_id"],
         "unit_id": identity["unit_id"],
@@ -622,6 +624,7 @@ def build_quick_status_script(manifest_path: Path | str) -> str:
         "case": identity["case"],
         "remote_case_dir": identity["remote_case_dir"],
         "tmux_session": identity["tmux_session"],
+        "tmux_socket": identity["remote_batch_dir"] + '/.agent_tmux.sock' if bounded else None,
     }
     identity_literal = repr(json.dumps(remote_identity, ensure_ascii=False, separators=(",", ":")))
     template = r'''#!/usr/bin/env python3
@@ -794,6 +797,23 @@ def probe_pid(pid, declarations):
             result.update({"state": state, "pid": int(parts[0]),
                            "process_state": parts[1], "elapsed": parts[2],
                            "comm": parts[3]})
+            if state == 'PRESENT':
+                try:
+                    proc=Path('/proc')/str(pid)
+                    cwd=(proc/'cwd').resolve(strict=True)
+                    args=[value.decode('utf-8','replace') for value in (proc/'cmdline').read_bytes().split(b'\0') if value]
+                    script=any(Path(arg).name in ('job_watch.py','practical_runtime.py','run_task.sh') for arg in args)
+                    scope=cwd in (BATCH.resolve(),CASE.resolve()) and (str(BATCH) in args or script)
+                    boot=int(next(line.split()[1] for line in Path('/proc/stat').read_text().splitlines() if line.startswith('btime ')))
+                    ticks=int((proc/'stat').read_text().rsplit(')',1)[1].split()[19])
+                    result['process_started_utc']=mtime_utc(boot+ticks/os.sysconf('SC_CLK_TCK'))
+                    if scope and script:
+                        result['identity_match']='TASK_CONTEXT_MATCH'
+                    else:
+                        result['identity_match']='MISMATCH'
+                    result['identity_scope']='exact cwd, runtime command and process start time; no execution nonce in PID'
+                except (OSError,ValueError,StopIteration,IndexError):
+                    result['context_error']='process_context_unavailable'
         else:
             result["reason"] = "unparseable_ps_record"
     elif checked.returncode == 1 and not line:
@@ -865,6 +885,8 @@ def main():
     timing_binding = identity_binding(
         timing_doc.get("task_id"), timing_unit, timing_doc.get("execution_id")
     )
+    if entries['run_timing.txt'].get('reason') == 'missing' and not timing_doc:
+        timing_binding = {'state':'UNKNOWN','reason':'timing_not_written'}
     if timing_doc.get("case_id") is not None and timing_doc.get("case_id") != IDENTITY["case"]:
         timing_binding["state"] = "MISMATCH"
         timing_binding["case_match"] = False
@@ -922,9 +944,12 @@ def main():
             tmux_info.update({"state": "CONFLICT", "reason": "unsafe_session_name"})
         else:
             try:
+                tmux_argv = ["tmux", "display-message", "-p", "-t", session,
+                             "#{session_name}\t#{pane_dead}\t#{pane_pid}"]
+                if IDENTITY.get('tmux_socket'):
+                    tmux_argv[1:1] = ['-S', IDENTITY['tmux_socket']]
                 checked = subprocess.run(
-                    ["tmux", "display-message", "-p", "-t", session,
-                     "#{session_name}\t#{pane_dead}\t#{pane_pid}"],
+                    tmux_argv,
                     capture_output=True, text=True, check=False, timeout=1,
                 )
                 fields = checked.stdout.strip().split("\t")
@@ -1016,6 +1041,59 @@ def _normalise_quick_state(value: Any) -> tuple[str, str | None]:
         return "UNKNOWN", None
 
 
+def _timing_absent(remote):
+    sources,files=remote.get('sources'),remote.get('files')
+    if not isinstance(sources,dict) or not isinstance(files,dict):return False
+    info=sources.get('run_timing',{})
+    file=files.get('run_timing.txt',{})
+    if not isinstance(info,dict) or not isinstance(file,dict):return False
+    before=file.get('read_before')
+    return (info.get('available') is False and info.get('raw_status') is None
+            and not info.get('exit_codes') and not info.get('error')
+            and file.get('reason')=='missing' and isinstance(before,dict) and before.get('present') is False
+            and file.get('read_after') is None and file.get('read_bytes')==0 and not file.get('read_error'))
+
+
+def _live_output_and_context(remote):
+    def timestamp(value):
+        if not isinstance(value,str):return None
+        try:
+            parsed=datetime.fromisoformat(value.replace('Z','+00:00'))
+            return parsed.astimezone(timezone.utc) if parsed.tzinfo is not None else None
+        except ValueError:return None
+    observed=timestamp(remote.get('observed_utc') or remote.get('remote_observed_utc'))
+    status=remote.get('sources',{}).get('status_json',{})
+    started=timestamp(status.get('started_utc'))
+    written=timestamp(status.get('updated_utc'))
+    if not all((observed,started,written)) or not started<=written<=observed<=datetime.now(timezone.utc):
+        return False
+    processes=remote.get('processes',[])
+    if not isinstance(processes,list) or not processes or any(not isinstance(row,dict) for row in processes):
+        return False
+    for process in processes:
+        birth=timestamp(process.get('process_started_utc'))
+        if (process.get('state')!='PRESENT' or process.get('identity_match')!='TASK_CONTEXT_MATCH'
+                or birth is None or not -5 <= (birth-started).total_seconds()
+                or (birth-written).total_seconds()>2):
+            return False
+    progress=remote.get('progress',{})
+    candidates={'OSZICAR':progress.get('oszicar',{}).get('tail_visible_electronic_rows',[]) +
+                ([progress['oszicar']['last_visible_complete_ionic_row']] if progress.get('oszicar',{}).get('last_visible_complete_ionic_row') else []),
+                'vasp.stdout':progress.get('stdout',{}).get('electronic_rows',[])+progress.get('stdout',{}).get('ionic_rows',[]),
+                'OUTCAR':progress.get('outcar',{}).get('marker_lines',[])}
+    for role,rows in candidates.items():
+        file=remote.get('files',{}).get(role,{})
+        before,after=file.get('read_before'),file.get('read_after')
+        modified=timestamp(after.get('mtime_utc')) if isinstance(after,dict) else None
+        if (not isinstance(before,dict) or before!=after or before.get('present') is not True
+                or file.get('stable') is not True or file.get('read_error') or modified is None
+                or not started<=modified<=observed or (observed-modified).total_seconds()>300):
+            continue
+        if any(isinstance(row,dict) and re.search(r'^\s*(?:(?:DAV|RMM):\s*\d+|\d+\s+F\s*=|LOOP\+?\s*:)',row.get('raw',''),re.I) for row in rows):
+            return True
+    return False
+
+
 def _quick_status_canonical(remote: dict[str, Any]) -> tuple[str, str, list[str]]:
     reasons: list[str] = []
     sources = remote.get("sources")
@@ -1035,12 +1113,41 @@ def _quick_status_canonical(remote: dict[str, Any]) -> tuple[str, str, list[str]
     )
     if status_binding != "MATCH":
         reasons.append("status.json identity binding is not strong and exact")
-    if timing_binding != "MATCH":
-        reasons.append("run_timing identity binding is not exact")
-    if status_binding != "MATCH" or timing_binding != "MATCH":
-        return "UNKNOWN", "UNKNOWN", reasons
     status_state, status_alias = _normalise_quick_state(status.get("raw_status"))
+    pending = status_state == RUNNING and _timing_absent(remote)
+    timing['lifecycle'] = ('TIMING_PENDING_UNTIL_EXIT' if pending else
+                           'TIMING_REQUIRED' if status_state in TERMINAL_STATES else 'TIMING_PRESENT' if timing.get('available') else 'TIMING_UNAVAILABLE')
+    if timing_binding != "MATCH" and not pending:
+        reasons.append("run_timing identity binding is not exact")
+    if status_binding != "MATCH" or (timing_binding != "MATCH" and not pending):
+        return "UNKNOWN", "UNKNOWN", reasons
     timing_state, timing_alias = _normalise_quick_state(timing.get("raw_status"))
+    if pending:
+        timing_state = RUNNING
+        if not _live_output_and_context(remote):
+            return 'UNKNOWN','UNKNOWN',['RUNNING requires fresh stable calculation output and live task process context; status is not a heartbeat']
+    # Fixed-cell timing files record the program exit before output postcheck;
+    # they can predate the explicit status field. Corroborate only a terminal
+    # supervisor with exact identities and a stable, complete timing read.
+    timing_file = remote.get('files', {}).get('run_timing.txt', {})
+    exit_code = timing.get('exit_codes', {}).get('exit_code')
+    valid_exit = ((type(exit_code) is int and 0 <= exit_code <= 255)
+                  or (isinstance(exit_code, str) and re.fullmatch(r'\d{1,3}', exit_code) and int(exit_code) <= 255))
+    if not pending and timing_file and (timing_file.get('stable') is not True or timing_file.get('read_error')):
+        return 'UNKNOWN','UNKNOWN',['run_timing exists but its read is incomplete or unstable']
+    if status_state in TERMINAL_STATES and not valid_exit:
+        return 'UNKNOWN','UNKNOWN',['Terminal state requires a valid final timing exit code']
+    if status_state=='COMPLETED_PENDING_REVIEW' and int(exit_code)!=0:
+        return 'UNKNOWN','CONFLICT',['Completed state conflicts with nonzero program exit']
+    if status_state==RUNNING and valid_exit:
+        return 'UNKNOWN','CONFLICT',['RUNNING conflicts with final program-exit timing']
+    if (timing.get('raw_status') is None and timing_state == 'UNKNOWN'
+            and timing_file.get('stable') is True and timing_file.get('truncated_prefix') is False
+            and timing_file.get('read_before', {}).get('present') is True and not timing_file.get('read_error')
+            and valid_exit and (status_state == 'FAILED_OR_INCOMPLETE'
+                                 or (status_state == 'COMPLETED_PENDING_REVIEW' and int(exit_code) == 0))):
+        timing_state = status_state
+        timing['state_basis'] = 'exact terminal supervisor plus stable program-exit timing; convergence not assessed'
     if status_alias is not None:
         status["legacy_alias"] = status_alias
     if timing_alias is not None:
@@ -1259,10 +1366,12 @@ def quick_status(
         if not isinstance(source, dict):
             base["reasons"].append(f"{source_name} is missing")
             continue
+        if source_name=='run_timing' and _timing_absent(remote) and source.get('lifecycle')=='TIMING_PENDING_UNTIL_EXIT':
+            continue
         freshness_info = source.get("freshness")
         if not isinstance(freshness_info, dict) or freshness_info.get("state") == "UNKNOWN":
             base["reasons"].append(f"{source_name} freshness is unknown")
-        elif freshness_info.get("state") == "STALE" and source_name != "status_json":
+        elif freshness_info.get("state") == "STALE" and source_name != "status_json" and canonical not in TERMINAL_STATES:
             base["reasons"].append(f"{source_name} is stale")
         if source.get("error"):
             base["reasons"].append(f"{source_name}: {source['error']}")
@@ -1271,6 +1380,8 @@ def quick_status(
         base["reasons"].append("remote file metadata is missing")
     else:
         for role in ("status.json", "run_timing.txt", "OUTCAR", "OSZICAR", "vasp.stdout", "vasp.stderr"):
+            if role=='run_timing.txt' and _timing_absent(remote) and remote_sources.get('run_timing',{}).get('lifecycle')=='TIMING_PENDING_UNTIL_EXIT':
+                continue
             item = files.get(role)
             if not isinstance(item, dict):
                 base["reasons"].append(f"{role} metadata is missing")
@@ -1286,6 +1397,8 @@ def quick_status(
                 base["reasons"].append(f"{role} reports a bounded tail; earlier bytes were not inspected")
     if remote.get("process_probe_limit_reached"):
         base["reasons"].append("task-declared PID probe limit reached")
+    if canonical==RUNNING and any(row.get('identity_match') in ('PID_ONLY_UNVERIFIED','TASK_CONTEXT_MATCH') for row in remote.get('processes',[])):
+        base['reasons'].append('Process identity is limited to observed PID/context; it is not an execution nonce')
     base["query_status"] = "PARTIAL" if base["reasons"] else "OK"
     return base
 
@@ -1422,6 +1535,47 @@ def _diagnostic_category(line: str) -> tuple[str, str] | None:
 
 def _contains_paw_body(text: str) -> bool:
     return bool(PAW_BODY_RE.search(text))
+
+
+def _terminal_output_context(manifest_path, preparation_path):
+    manifest_path=Path(manifest_path).resolve(strict=True)
+    preparation_path=Path(preparation_path).resolve(strict=True)
+    prepared=read_json(preparation_path)
+    manifest=read_json(manifest_path)
+    inputs_path=manifest_path.parent/'input_manifest.json'
+    inputs=read_json(inputs_path)
+    digest=lambda path:hashlib.sha256(path.read_bytes()).hexdigest()
+    if (prepared.get('status')!='LOCAL_PACKAGE_CHECKED' or prepared.get('blockers')!=[]
+            or Path(prepared.get('candidate','')).resolve()!=manifest_path.parent
+            or prepared.get('candidate_manifest_sha256')!=digest(inputs_path)
+            or prepared.get('candidate_execution_manifest_sha256')!=digest(manifest_path)
+            or prepared.get('task_id')!=manifest.get('task_id')
+            or any(inputs.get(key)!=manifest.get(key) for key in ('task_id','unit_id'))):
+        raise EvidenceError('Complete terminal output requires exact preparation and input identity')
+    structure=inputs['structure']
+    if type(structure.get('nions'))is not int or structure['nions']<=0 or not isinstance(structure.get('nelect'),(int,float)):
+        raise EvidenceError('Explicit approved atom/electron counts required')
+    version=manifest.get('environment',{}).get('vasp_version')
+    if not isinstance(version,str) or not re.fullmatch(r'\d+\.\d+\.\d+',version):
+        raise EvidenceError('Explicit approved VASP version required')
+    return dict(schema='authorized-terminal-full-outputs/v1',preparation_path=str(preparation_path),
+                preparation_sha256=digest(preparation_path),input_manifest_sha256=digest(inputs_path),
+                execution_manifest_sha256=digest(manifest_path),nions=structure['nions'],nelect=structure['nelect'],vasp_version=version)
+
+
+def _ordinary_terminal_outcar(text, context):
+    # Full private outputs echo PAW metadata; progress fragments keep their
+    # original conservative filter. Dataset sections never use this exception.
+    if re.search(r'(?im)^\s*(?:End of Dataset\b|PSCTR\b|radial\s+(?:grid|potential)\b|Non\s+local\s+Part\b|pseudo\s+wavefunctions?\b|local\s+part\s*$|augmentation\s+(?:charges|functions)\b)',text):
+        return False
+    nions=re.findall(r'\bNIONS\s*=\s*(\d+)',text)
+    nelect=re.findall(r'\bNELECT\s*=\s*('+FLOAT_RE+')',text)
+    return bool(re.search(r'(?m)^\s*vasp\.'+re.escape(context['vasp_version'])+r'\b',text[:2048])
+                and re.search(r'(?m)^\s*INCAR:',text) and 'Dimension of arrays' in text
+                and 'TOTAL-FORCE' in text and re.search(r'\bLOOP\+?\s*:',text)
+                and re.search(r'General timing and accounting informations',text,re.I)
+                and nions and all(int(value)==context['nions'] for value in nions)
+                and nelect and all(abs(float(value.replace('D','E').replace('d','e'))-context['nelect'])<1e-8 for value in nelect))
 
 
 def _remote_stat_from_meta(meta: dict[str, Any] | None, key: str, fallback: dict[str, Any]) -> dict[str, Any]:
@@ -1731,8 +1885,24 @@ def _verify_record(
         return None
     if not data and role != "vasp.stderr":
         gaps.append(f"{role}/{record.get('fragment_id')}: raw evidence is empty")
-    if role == "OUTCAR" and _contains_paw_body(data.decode("utf-8", errors="replace")):
-        issues.append(f"{role}/{record.get('fragment_id')}: PAW body is present in bundle")
+    if role == "OUTCAR":
+        context=record.get('terminal_full_output_context')
+        if context is not None:
+            try:
+                expected=_terminal_output_context(identity['manifest_path'],context['preparation_path'])
+                # Early v1 receipts omitted this duplicated version field.
+                # The unchanged execution-manifest hash still binds its value;
+                # derive it from that exact manifest, never from the OUTCAR.
+                comparable=dict(context)
+                comparable.setdefault('vasp_version',expected['vasp_version'])
+                if (comparable!=expected or record.get('coverage')!='full' or not _stat_pair_consistent(record)
+                        or record.get('terminal_outcar_sha256')!=hashlib.sha256(data).hexdigest()
+                        or not _ordinary_terminal_outcar(data.decode('utf-8',errors='replace'),expected)):
+                    raise EvidenceError('Complete OUTCAR context or structure differs')
+            except (EvidenceError,OSError,ValueError,KeyError,TypeError):
+                issues.append(f"{role}/{record.get('fragment_id')}: invalid terminal full-output policy")
+        elif _contains_paw_body(data.decode("utf-8", errors="replace")):
+            issues.append(f"{role}/{record.get('fragment_id')}: PAW body is present in bundle")
     return data.decode("utf-8", errors="replace")
 
 
@@ -3060,6 +3230,8 @@ def ingest_export(
     command_started_utc: str | None = None,
     command_ended_utc: str | None = None,
     command_stderr: str | None = None,
+    purpose: str | None = None,
+    preparation_path: Path | str | None = None,
 ) -> Path:
     """Ingest framed stdout from build_remote_export_script into a new bundle.
 
@@ -3071,6 +3243,9 @@ def ingest_export(
     task_root = Path(task_dir).resolve()
     manifest = Path(manifest_path).resolve()
     identity = _load_raw_evidence_identity(manifest)
+    if purpose not in (None,'authorized_terminal_full_outputs'):
+        raise EvidenceError('Unsupported evidence ingestion purpose')
+    terminal_context = _terminal_output_context(manifest,preparation_path) if purpose else None
     lines = stream
     frames: list[dict[str, Any]] = []
     start_frame: dict[str, Any] | None = None
@@ -3112,6 +3287,19 @@ def ingest_export(
                 }
         elif isinstance(item, dict) and item.get("type") == "end":
             end_frame = item
+    if terminal_context is not None:
+        statuses=[frame for frame in metadata_frames if frame.get('role')=='job_status']
+        if len(statuses)!=1:
+            raise EvidenceError('Explicit full outputs require one terminal status record')
+        status_raw=base64.b64decode(statuses[0].get('content_b64',''),validate=True)
+        status=json.loads(status_raw)
+        before=statuses[0].get('read_before')
+        if (any(status.get(key)!=identity.get(key) for key in ('task_id','unit_id','execution_id'))
+                or status.get('status') not in ('COMPLETED_PENDING_REVIEW','FAILED_OR_INCOMPLETE')
+                or not isinstance(before,dict) or before.get('present') is not True or before.get('bytes')!=len(status_raw)
+                or statuses[0].get('coverage')!='full' or before!=statuses[0].get('read_after')
+                or statuses[0].get('source_path')!=identity['remote_batch_dir']+'/.job_watch/status.json'):
+            raise EvidenceError('Full-output terminal source is not exactly bound and stable')
     snapshots_root = task_root / "snapshots"
     snapshots_root.mkdir(parents=True, exist_ok=True)
     name = snapshot_name or compact_utc()
@@ -3182,9 +3370,18 @@ def ingest_export(
         except (TypeError, ValueError):
             failures.append(f"frame {index}: invalid base64")
             continue
-        if role == "OUTCAR" and _contains_paw_body(data.decode("utf-8", errors="replace")):
-            failures.append(f"frame {index}: embedded PAW body refused")
-            continue
+        if role == 'OUTCAR':
+            if terminal_context is not None:
+                if (frame.get('kind')!='recovery_full_output' or frame.get('coverage')!='full'
+                        or frame.get('original_start_byte')!=0 or frame.get('original_end_byte')!=len(data)
+                        or frame.get('read_before')!=frame.get('read_after')
+                        or (frame.get('read_before') or {}).get('bytes')!=len(data)
+                        or not _ordinary_terminal_outcar(data.decode('utf-8',errors='replace'),terminal_context)):
+                    failures.append(f'frame {index}: complete terminal OUTCAR policy rejected')
+                    continue
+            elif _contains_paw_body(data.decode('utf-8',errors='replace')):
+                failures.append(f'frame {index}: embedded PAW body refused')
+                continue
         fragment_id = str(frame.get("fragment_id") or f"{role}-{index:03d}")
         safe_id = re.sub(r"[^A-Za-z0-9_.-]+", "_", fragment_id)
         destination = raw_root / role / f"{safe_id}.txt"
@@ -3231,6 +3428,9 @@ def ingest_export(
         ):
             if key in frame:
                 record[key] = frame[key]
+        if role == 'OUTCAR' and terminal_context is not None:
+            record['terminal_full_output_context']=terminal_context
+            record['terminal_outcar_sha256']=hashlib.sha256(data).hexdigest()
         files[role].append(record)
     if not isinstance(source_mode, str) or not source_mode.strip():
         raise EvidenceError("source_mode must be a nonempty string")

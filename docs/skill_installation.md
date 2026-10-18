@@ -47,3 +47,7 @@ that the skill was loaded.
 ## 选择协作模式
 
 首次接入时也可选择单 agent、按需 subagent 或固定双线程；已有模式直接沿用，后续无需重复选择。模型偏好单独配置，宿主能力不足时明确说明。详见[协作方式](collaboration_modes.md)。
+
+## 开始前确认任务范围
+
+当前标准流程支持静态、原子参照、固定胞 fresh/warm 弛豫，采用无外场、无 SOC 的范围。超出时先说明支持缺口与验证要求，不因 skill 已安装而宣称可以直接执行。可先阅读[完整对话示意](walkthrough.md)。

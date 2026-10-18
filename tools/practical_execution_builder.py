@@ -60,7 +60,12 @@ def describe(inputs,execution_source,requirements_source,environment):
         value=environment[key]
         if not re.fullmatch(r'/[A-Za-z0-9_./+-]+',value) or '..' in PurePosixPath(value).parts:
             raise ValueError('Unsafe approved runtime path')
-    if environment['mpi_args']!=['--map-by','core','--bind-to','core','--nooversubscribe','--report-bindings']:
+    bounded=environment.get('bounded_validation')
+    if bounded is not None:
+        from practical_runtime import bounded_validation
+        bounded_validation({'environment':environment,'parallel':inputs['parallel'],**{key:identity[key] for key in ('task_id','unit_id','remote_batch_dir')}})
+    expected_mpi=['--bind-to','none','--nooversubscribe','--report-bindings'] if bounded else ['--map-by','core','--bind-to','core','--nooversubscribe','--report-bindings']
+    if environment['mpi_args']!=expected_mpi:
         raise ValueError('Runtime MPI binding differs from the approved profile')
     if not diagnostic and (inputs['incar']['ISIF']!=2 or type(inputs['incar']['IBRION']) is not int or inputs['incar']['IBRION'] not in (1,2) or type(inputs['incar']['NSW']) is not int or inputs['incar']['NSW']<=0):
         raise ValueError('Generic runtime supports approved fixed-cell ionic relaxation only')

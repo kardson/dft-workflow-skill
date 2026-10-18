@@ -2,6 +2,10 @@
 
 **使用 AI agent 开展 VASP DFT 模拟计算的工作流，现在以 `vasp-dft-workflow` skill 提供。**
 
+**当前标准范围：静态计算、原子参照及固定胞 fresh/warm 弛豫；无外场、无 SOC。** 其他方法需先讨论支持边界和新增验证。
+
+[看一次自然语言协作示意](docs/walkthrough.md)。
+
 提出研究问题、提供材料并确认科学方案；agent 负责按需选择工具、处理命令与记录，并将结论连回实际证据。
 
 安装：请从 [GitHub](https://github.com/kardson/dft-workflow-toolkit) 安装 `vasp-dft-workflow` skill。

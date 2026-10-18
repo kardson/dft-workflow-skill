@@ -210,6 +210,8 @@ def audit(candidate, plan_path, approval_path, approved_manifest, workspace, too
     return {"schema": "dft-preparation-handoff/v1", "task_id": plan.get("task_id"), "stage_id": approval.get("stage_id"),
             "status": "LOCAL_PACKAGE_CHECKED" if not blockers else "BLOCKED", "blockers": blockers,
             "scientific_differences": differences, "candidate": str(root), "package_kind": kind,
+            "approval_record_ref": str(Path(approval_path).resolve()), "plan_ref": str(Path(plan_path).resolve()),
+            "approved_manifest_ref": str(Path(approved_manifest).resolve()),
             "approval_record_sha256": digest(approval_path), "plan_sha256": digest(plan_path),
             "approved_manifest_sha256": digest(approved_manifest), "existing_checks": checked,
             "candidate_manifest_sha256": digest(root / "input_manifest.json"),
@@ -242,6 +244,11 @@ def main(argv=None):
              "", "缺项：" + json.dumps(result["blockers"], ensure_ascii=False),
              "", "本结果仅限本地准备，尚未启动计算；远端条件在启动前核验。", ""]
     (args.output_dir / "README.md").write_text("\n".join(lines), encoding="utf-8")
+    if result["blockers"]:
+        from issue_report import write_issue
+        write_issue(args.output_dir, result.get("task_id"), "BLOCKED", result["blockers"],
+                    "候选包未通过准备检查，不能据此部署或启动。", "核对原始回执与批准规格，完成范围内机械修正后重验。",
+                    "科学选择或批准范围需改变时由研究者决定；否则暂无。", ["preparation.json"])
     print(json.dumps({"status": result["status"], "blockers": result["blockers"]}))
     return 0 if not result["blockers"] else 1
 

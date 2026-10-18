@@ -102,6 +102,11 @@ def evaluate(snapshot, verified, trigger, authority=None, *, manifest_sha=None, 
     sources = snapshot.get("sources", {})
     status_source, timing_source = sources.get("status_json", {}), sources.get("run_timing", {})
     processes, tmux = snapshot.get("processes", []), snapshot.get("tmux", {})
+    timing_file = snapshot.get('files', {}).get('run_timing.txt', {})
+    timing_confirmed_missing = (timing_file.get('reason') == 'missing'
+                                and timing_file.get('read_before', {}).get('present') is False
+                                and timing_file.get('read_bytes') == 0
+                                and timing_file.get('read_error') is None)
     # Static runners may not create timing until exit. Keep the canonical full
     # state UNKNOWN, but allow an explicitly limited startup observation from a
     # strongly bound supervisor, live exact PIDs/session and post-start output.
@@ -110,7 +115,7 @@ def evaluate(snapshot, verified, trigger, authority=None, *, manifest_sha=None, 
                     and status_source.get("identity_binding", {}).get("state") == "MATCH"
                     and status_source.get("raw_status") == "RUNNING"
                     and timing_source.get("available") is False
-                    and timing_source.get("identity_binding", {}).get("state") != "MISMATCH"
+                    and (timing_source.get("identity_binding", {}).get("state") != "MISMATCH" or timing_confirmed_missing)
                     and processes and all(row.get("state") == "PRESENT" for row in processes)
                     and tmux.get("state") == "PRESENT" and tmux.get("pane_dead") is False)
     if trigger == "startup" and ((not problems and state in {"STARTING", "RUNNING"}) or startup_only):
@@ -135,6 +140,14 @@ def evaluate(snapshot, verified, trigger, authority=None, *, manifest_sha=None, 
             startup = "STARTED_WITH_OUTPUT_EVIDENCE"
         elif fatal:
             startup = "STARTUP_ERROR_EVIDENCE"
+        elif any(isinstance(line, str) and line.strip().lower() == 'entering main loop' for line in stdout.get('tail_lines', [])):
+            output_file = snapshot.get('files', {}).get('vasp.stdout', {})
+            try:
+                if (output_file.get('stable') is True
+                        and stamp(started) <= stamp(output_file.get('read_after', {}).get('mtime_utc')) <= stamp(observed)):
+                    startup = 'INITIALIZED_PENDING_PROGRESS'
+            except (ValueError, TypeError, AttributeError):
+                pass
         action = "REPORT_STARTUP_AND_END"
     elif not problems and state in TERMINAL:
         if (permitted(authority, expected, "RECOVER", trigger, manifest_sha)
@@ -185,6 +198,8 @@ def main(argv=None):
             summary += "运行计时记录尚未就绪，完整状态仍待核实。"
     elif result["startup_result"] == "STARTUP_ERROR_EVIDENCE":
         summary = "启动输出中发现错误证据，需要核实原因。"
+    elif result['startup_result'] == 'INITIALIZED_PENDING_PROGRESS':
+        summary = '已观察到初始化完成并进入主循环；尚无完整电子步证据，不能据此确认收敛或正常终态。本轮启动核验结束，不持续等待。'
     elif result["startup_result"] == "PENDING":
         summary = "启动证据尚不足，本轮报告缺口后结束，不持续等待。"
     elif result["state"] in TERMINAL:
@@ -197,6 +212,12 @@ def main(argv=None):
              "", "启动核验：" + result["startup_result"], "", "下一动作：" + result["next_action"],
              "", "仅代表记录时刻；本工具不持续盯守，也未回收输出或作科学接受。", ""]
     (args.output_dir / "README.md").write_text("\n".join(lines), encoding="utf-8")
+    if result["blockers"] or result["startup_result"] in {"PENDING", "STARTUP_ERROR_EVIDENCE"} or result["state"] == "UNKNOWN":
+        from issue_report import write_issue
+        reasons = result["blockers"] or ["启动核验：" + str(result["startup_result"]) + "；状态：" + result["state"]]
+        write_issue(args.output_dir, result["identity"].get("task_id"), "UNKNOWN", reasons,
+                    "本次观察不足以确认正常推进或完整运行状态。", "报告已有证据后结束；仅按请求或明确安排再次检查，不自动重启。",
+                    "需要扩大诊断、修复或改变执行范围时由用户决定。", ["execution_handoff.json", "snapshot.json"])
     print(json.dumps({"state": result["state"], "next_action": result["next_action"]}))
     return 1 if result["blockers"] else 0
 

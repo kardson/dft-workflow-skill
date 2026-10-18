@@ -1758,7 +1758,14 @@ def postcheck(
             ))
     else:
         result["evidence"]["parser_status"] = "NOT_RUN"
-    actual_incar = parse_incar(texts.get("INCAR"), case / "INCAR")
+    # Required outputs normally exclude INCAR. Parameter comparison must read
+    # the actual case input independently of that output-only whitelist.
+    incar_text = texts.get('INCAR')
+    if incar_text is None:
+        incar_text, incar_error = _read_text(case / 'INCAR')
+        if incar_error:
+            result['check_errors'].append(incar_error)
+    actual_incar = parse_incar(incar_text, case / "INCAR")
     result["parameter_comparison"] = compare_parameter_sources(
         manifest,
         actual_incar,

@@ -95,5 +95,16 @@ class PlanningTests(unittest.TestCase):
             self.assertIn("UNKNOWN", report)
 
 
+    def test_blocked_cli_writes_issue_sidecar(self):
+        with runtime_directory() as temp:
+            root=Path(temp);plan=fixture(root);plan['research_question']=''
+            source=root/'plan.json';source.write_text(json.dumps(plan),encoding='utf-8')
+            output=root/'blocked'
+            self.assertEqual(planning.main(['--plan',str(source),'--workspace',str(root),'--output-dir',str(output)]),1)
+            issues=json.loads((output/'issues.json').read_text(encoding='utf-8'))
+            self.assertEqual(issues['status'],'BLOCKED')
+            self.assertTrue(issues['issues'][0]['user_decision'])
+            self.assertIn('plan_check.json',(output/'ISSUES.md').read_text(encoding='utf-8'))
+
 if __name__ == "__main__":
     unittest.main()

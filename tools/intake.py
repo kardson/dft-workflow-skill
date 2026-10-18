@@ -123,6 +123,10 @@ def main(argv=None):
     args.output_dir.mkdir(parents=True, exist_ok=False)
     (args.output_dir / "intake_check.json").write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     (args.output_dir / "README.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    if result["blockers"]:
+        from issue_report import write_issue
+        write_issue(args.output_dir, request.get("task_id"), "BLOCKED", result["blockers"],
+                    "研究意图或材料尚不明确，不能据此确定计算方案。", "依据报告逐项澄清问题，检索并整理材料缺口。", "确认研究问题和条件；补充明确列出的受限材料。", ["intake_check.json"])
     print(json.dumps({"status": result["status"], "questions": len(result["questions_to_user"]), "material_actions": len(result["material_actions"])}, ensure_ascii=True))
     return 1 if result["blockers"] else 0
 

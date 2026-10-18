@@ -13,9 +13,19 @@ Help the researcher express the scientific goal in natural language while you ha
 
 When first used in a selected research workspace, read [project connection](docs/skill_installation.md#首次项目接入与自动使用). Check existing project instructions for an equivalent rule. If absent, show the proposed project-local default-routing block and obtain permission to merge it into that workspace's AGENTS.md, unless the user has already authorized that concrete change. Installation alone is not authorization to edit a research project. Preserve all existing rules; never rewrite or duplicate the file or change unrelated routes. If permission is declined or the file is read-only, continue the requested work without persisting a rule. Once connected, reuse the rule without asking again. Simple progress queries must not be delayed by onboarding.
 
+Read [setup receipts and issue delivery](docs/project_setup.md) when completing first setup or reporting a blocked, partial, failed or unknown outcome. Use project_setup.py to summarize original environment reports and observed host capabilities; do not infer live readiness from dated receipts. Deliver reason, impact, permitted agent action and required user decision with every issue.
+
 ## Collaboration mode
 
 At project connection, read [collaboration modes](docs/collaboration_modes.md). Reuse the project's existing explicit mode and scientific roles; otherwise ask once whether to use single-agent, on-demand subagents, or a persistent coordinator/executor pair. Persist the actual choice in the project's existing instructions within granted edit authorization. Model preferences are separate and host-dependent. Do not delegate or create/message threads merely because the host supports them. Use bounded task packets and one writer per active unit; switch only after an explicit handoff. Simple requests stay lightweight in every mode.
+
+For continuation requests, read [task recovery](docs/task_resume.md) and verify the explicit continuation evidence with task_resume.py. A historical running stage is not a live status observation and must never trigger a duplicate launch.
+
+For existing calculations lacking historical preparation/approval records, use [limited legacy import](docs/legacy_import.md). Do not fabricate past approvals or bypass the controlled analysis entry.
+
+For skill updates, follow [side-by-side upgrade](docs/skill_upgrade.md). Preserve existing installation and local instructions; staging is not activation or a compatibility claim.
+
+For explicitly authorized Linux SSH fixed-cell deployment, read [the workstation adapter](docs/ssh_deployment.md). Its real-host validation is incomplete; do not imply production readiness or broaden its supported package types. Deployment, runtime preparation and launch are distinct authorized actions.
 
 ## Route each request
 

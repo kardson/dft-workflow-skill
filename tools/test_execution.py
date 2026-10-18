@@ -32,6 +32,8 @@ def fixture(state="RUNNING"):
         "tmux": {"state": "ABSENT" if terminal else "PRESENT", "pane_dead": terminal},
         "files": {"OSZICAR": {"stable": True, "read_after": {"mtime_utc": "2026-10-14T00:09:00+00:00"}}},
         "progress": {"oszicar": {"tail_visible_electronic_rows": [{"raw": "DAV: 1"}]}}, "reasons": []}
+    if terminal:
+        snapshot['sources']['run_timing']['exit_codes']={'exit_code':0}
     return snapshot, identity
 
 
@@ -46,6 +48,44 @@ def authority(identity, checksum):
 
 
 class ExecutionTests(unittest.TestCase):
+    def test_terminal_timing_without_status_needs_exit_and_stable_identity(self):
+        snap,identity=fixture('COMPLETED_PENDING_REVIEW')
+        snap['sources']['run_timing'].update(raw_status=None,exit_codes={'exit_code':'0'})
+        snap['files']['run_timing.txt']={'stable':True,'truncated_prefix':False,'read_before':{'present':True},'read_error':None}
+        self.assertEqual(verified(snap,identity)['state'],'COMPLETED_PENDING_REVIEW')
+        self.assertEqual(execution.evaluate(snap,verified(snap,identity),'user')['state'],'COMPLETED_PENDING_REVIEW')
+        for mutate in ('exit','identity','unstable','live','explicit_unknown'):
+            bad=copy.deepcopy(snap)
+            if mutate=='exit':bad['sources']['run_timing']['exit_codes']['exit_code']='1'
+            if mutate=='identity':bad['sources']['run_timing']['identity_binding']['state']='MISMATCH'
+            if mutate=='unstable':bad['files']['run_timing.txt']['stable']=False
+            if mutate=='live':bad['processes'][0]['state']='PRESENT'
+            if mutate=='explicit_unknown':bad['sources']['run_timing']['raw_status']='UNKNOWN'
+            with self.subTest(mutate=mutate):self.assertEqual(verified(bad,identity)['state'],'UNKNOWN')
+
+    def test_initialization_with_confirmed_absent_timing_is_limited(self):
+        snap, identity = fixture()
+        snap['sources']['run_timing'] = {'available': False, 'identity_binding': {'state':'MISMATCH'}}
+        snap['canonical_status'],snap['state_consistency']='UNKNOWN','UNKNOWN'
+        snap['files']['run_timing.txt']={'reason':'missing','read_before':{'present':False},'read_bytes':0,'read_error':None}
+        snap['files']['vasp.stdout']=copy.deepcopy(snap['files']['OSZICAR'])
+        snap['progress']={'stdout':{'tail_lines':[' entering main loop']}}
+        result=execution.evaluate(snap,verified(snap,identity),'startup')
+        self.assertEqual(result['startup_result'],'INITIALIZED_PENDING_PROGRESS')
+        self.assertEqual(result['state'],'UNKNOWN')
+        self.assertTrue(result['end_agent_turn'])
+        snap['files']['run_timing.txt']['read_before']['present']=True
+        self.assertEqual(execution.evaluate(snap,verified(snap,identity),'startup')['startup_result'],'NOT_APPLICABLE')
+
+    def test_initialization_rejects_stale_output_and_fatal_error(self):
+        snap, identity = fixture()
+        snap['progress']={'stdout':{'tail_lines':['entering main loop']}}
+        snap['files']['vasp.stdout']=copy.deepcopy(snap['files']['OSZICAR'])
+        snap['files']['vasp.stdout']['read_after']['mtime_utc']='2026-10-13T00:00:00+00:00'
+        self.assertEqual(execution.evaluate(snap,verified(snap,identity),'startup')['startup_result'],'PENDING')
+        snap['progress']['stderr']={'tail_lines':['MPI_ABORT']}
+        self.assertEqual(execution.evaluate(snap,verified(snap,identity),'startup')['startup_result'],'STARTUP_ERROR_EVIDENCE')
+
     def test_startup_requires_actual_recent_output_and_ends_turn(self):
         snap, identity = fixture()
         result = execution.evaluate(snap, verified(snap, identity), "startup")

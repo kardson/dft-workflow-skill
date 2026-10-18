@@ -340,7 +340,7 @@ def _parameter_section(
 
 def _parameter_pattern(tag: str) -> re.Pattern[str]:
     return re.compile(
-        rf"(?<![A-Za-z0-9_]){re.escape(tag)}\s*=\s*(?P<value>.*)$",
+        rf"(?:^|;)\s*{re.escape(tag)}\s*=\s*(?P<value>[^;]*)",
         re.IGNORECASE,
     )
 
@@ -388,22 +388,30 @@ def parse_outcar_parameters(
                 "raw": line.strip(),
             })
         for tag, kind in OUTCAR_PARAMETER_FIELDS.items():
-            match = patterns[tag].search(line)
-            if not match:
-                continue
-            raw_value = match.group("value").strip()
-            section = current_section
-            if section == "unknown":
-                section = _parameter_section(lines, line_index, default=default_section)
-            fields[tag]["observations"].append({
-                "tag": tag,
-                "kind": kind,
-                "raw": line.strip(),
-                "raw_value": raw_value,
-                "value": normalise_parameter_value(raw_value, kind),
-                "section": section,
-                "source": source(path, line_offset + line_index),
-            })
+            for match in patterns[tag].finditer(line):
+                raw_value = match.group("value").strip()
+                # Values end before explanatory prose. In particular the numbers
+                # in descriptions must not change the precision of a scalar.
+                if kind in {'float','int','vector'}:
+                    token = FLOAT_RE if kind!='int' else r'[+-]?\d+'
+                    value_pattern = (r'\s+'.join([token]*3) if kind=='vector' else token) + r'(?=\s|$)'
+                    lexical = re.match(value_pattern,raw_value)
+                    if lexical:
+                        raw_value=lexical.group(0)
+                elif raw_value:
+                    raw_value=raw_value.split()[0]
+                section = current_section
+                if section == "unknown":
+                    section = _parameter_section(lines, line_index, default=default_section)
+                fields[tag]["observations"].append({
+                    "tag": tag,
+                    "kind": kind,
+                    "raw": line.strip(),
+                    "raw_value": raw_value,
+                    "value": normalise_parameter_value(raw_value, kind),
+                    "section": section,
+                    "source": source(path, line_offset + line_index),
+                })
     return result
 
 

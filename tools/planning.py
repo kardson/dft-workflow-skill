@@ -132,6 +132,10 @@ def main(argv=None):
     args.output_dir.mkdir(parents=True, exist_ok=False)
     (args.output_dir / "plan_check.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     (args.output_dir / "README.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    if result["blockers"]:
+        from issue_report import write_issue
+        write_issue(args.output_dir, plan.get("task_id"), "BLOCKED", result["blockers"],
+                    "方案尚不完整，不能作为准备与执行依据。", "整理缺失选择、方法依据和成本不确定性。", "确认科学选择、资源与停止条件。", ["plan_check.json"])
     print(json.dumps({"status": result["status"], "stage_count": result["stage_count"]}))
     return 1 if result["blockers"] else 0
 
