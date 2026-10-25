@@ -16,11 +16,11 @@
     },
     {
       "path": "README.md",
-      "sha256": "c95ab359e17b271e8ba9d473985f55080f70312b38ec881582c9cdd02c2746dd"
+      "sha256": "5ce84cd470233f2df1c1922d8b62ce463171075a4e2fa25efc769ea919702f59"
     },
     {
       "path": "SKILL.md",
-      "sha256": "5267155211d3ee1f08e431a7c73fc45e979b99297ca6f0c8db9aa7cde34d5f44"
+      "sha256": "dcfa7d1cd0df57d42a900161ab47819b3a25af81cd34ca47c3c585a24d9e51ed"
     },
     {
       "path": "THIRD_PARTY.md",
@@ -36,11 +36,11 @@
     },
     {
       "path": "docs/assets/workflow-banner.svg",
-      "sha256": "54b1a1cae46e42f14974f1587b01f1ed532036f7b6767f5e04236e0bcee9558b"
+      "sha256": "1a8ecfbb04e754203772fc5c62226f2497af9096bc644978563b93cccc70a82f"
     },
     {
       "path": "docs/capabilities.md",
-      "sha256": "5533a6ceffaea4a2c096e4c47823b7a673196ff718e7d9cafbfd80b6400313dc"
+      "sha256": "0697ac7d169bdf1a486f1e2536f196bbdbffc2ff60eb66bfb96a92d9d18e61a2"
     },
     {
       "path": "docs/collaboration_modes.md",
@@ -71,6 +71,10 @@
       "sha256": "78d293a1cba7df65ca6ca63b369aaf43ff5f662dd0f2253214b0afa8b01e02d3"
     },
     {
+      "path": "docs/local_tools.md",
+      "sha256": "7a1ae549fca3385dd23f3b602a39aad92ec4d354fc5a510055a344b90041cf6b"
+    },
+    {
       "path": "docs/private_workspace.md",
       "sha256": "e48504a0938be83b15c80fd881ed478c6c2ca028f777ebd7bc8b1df6761a15ad"
     },
@@ -88,7 +92,7 @@
     },
     {
       "path": "docs/skill_installation.md",
-      "sha256": "f8b171d02fdde2ca23c3079889b177be94c32a6d374ef9975af136931e409b23"
+      "sha256": "8be8ff38c05577aefccdb9d981027f20df7c2e74727deb66badc0374b6b1b091"
     },
     {
       "path": "docs/skill_upgrade.md",
@@ -165,6 +169,18 @@
     {
       "path": "templates/handoff.template.md",
       "sha256": "e9492a4321fc9f2ec39b2e716082256a994fd8f8813b69b4c3d49e2a971b508f"
+    },
+    {
+      "path": "templates/local-bulk.json",
+      "sha256": "6fb13ee5eebbdcf86d659dd092c272ea356a0abb0392441094c5e3964e585a65"
+    },
+    {
+      "path": "templates/local-interface.json",
+      "sha256": "300e85baf1d804e624988b9fdf1c97fcda6634924a912d9918e1d1576b46ddec"
+    },
+    {
+      "path": "templates/local-slab.json",
+      "sha256": "1c485b21abae02e2ec282a8eb92c60bd069a5c208e0efa49c9203c839dcb70df"
     },
     {
       "path": "templates/plan_approval.template.json",
@@ -293,6 +309,18 @@
     {
       "path": "tools/legacy_import.py",
       "sha256": "636b78ed20f155a07899b540b949c92054638b32ad99d9fe61e1a7c2e580003d"
+    },
+    {
+      "path": "tools/local_delivery.py",
+      "sha256": "46827593ca877d92ca0edee482736eb104f71ae81ff44d68c48f12f149ad0b5f"
+    },
+    {
+      "path": "tools/local_structure.py",
+      "sha256": "8b42afc97e76e0def5ca80cecdcb63ae7a4774ff2589643249ccce72760019d4"
+    },
+    {
+      "path": "tools/local_tools_cli.py",
+      "sha256": "27aeb5abdf3fc8c6d660675d4d8ccc4f70a2c6acefafc51f8fab028e23971d0a"
     },
     {
       "path": "tools/parameter_advice.py",
@@ -431,6 +459,10 @@
       "sha256": "22e83ec90d9cdb378df25ac3de6bf28e900c78f992486e354bb03c91ba95a2f2"
     },
     {
+      "path": "tools/test_local_workflow.py",
+      "sha256": "0064281e4f488c7762a0868f76d1701c508aa2b64e33b1f44e24702733ce5984"
+    },
+    {
       "path": "tools/test_output_parameter_sources.py",
       "sha256": "2227cae7b6f4d8c23e8a94eb2feb713823a41c2f40cff928871d1130bd29a162"
     },
@@ -500,7 +532,7 @@
     },
     {
       "path": "tools/tool_evidence.py",
-      "sha256": "e6c0775cc2fd9c6a06e45530080b3c54f9f4c7fa0cb0a63213e82fc0f5ae5616"
+      "sha256": "d957ea3b8aae7363b4e0d6f38770c68e9bb66ea06bb414089a2fad2fd90c74a8"
     },
     {
       "path": "tools/vasp_contracts.py",
@@ -533,6 +565,10 @@
     {
       "path": "tools/vasp_profile_policy.py",
       "sha256": "384797eb263a0a09248c2392fb1d24a2a6d742b0e5ec0292ec54febe0b5dfa83"
+    },
+    {
+      "path": "tools/vaspkit_wsl_backend.py",
+      "sha256": "4c49419c814fa8a73d0423ef350d50d3bdd581a8c4da0abe836aae64298c87b9"
     },
     {
       "path": "tools/workflow_check.py",

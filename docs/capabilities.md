@@ -23,6 +23,8 @@
 
 ## 贯穿全程的支撑能力
 
+本地结构候选、约束预览、受控 HTML、有限结构列表及静态输入归档使用 [local_tools_cli.py](../tools/local_tools_cli.py)，支持范围和显式配置见[本地工具](local_tools.md)。这些入口不运行 VASP，也不代替已有输入或结果审计。
+
 | 名称 | 作用 | 对应入口或说明 |
 |---|---|---|
 | **简明任务卡 · Task Card** | 在同一位置记录问题、阶段、证据、下一步、结论与限制 | [使用指南](getting_started.md#用任务卡掌握进展)、[任务记录模板](../templates/task_record.template.json) |

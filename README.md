@@ -1,4 +1,4 @@
-# DFT Workflow Toolkit
+# DFT Workflow Skill
 
 **使用 AI agent 开展 VASP DFT 模拟计算的工作流，现在以 `vasp-dft-workflow` skill 提供。**
 
@@ -8,7 +8,7 @@
 
 提出研究问题、提供材料并确认科学方案；agent 负责按需选择工具、处理命令与记录，并将结论连回实际证据。
 
-安装：请从 [GitHub](https://github.com/kardson/dft-workflow-toolkit) 安装 `vasp-dft-workflow` skill。
+安装：请从 [GitHub](https://github.com/kardson/dft-workflow-skill) 安装 `vasp-dft-workflow` skill。
 
 使用：直接告诉 agent：“帮我比较两种结构的稳定性，先核对环境和材料，再讨论计算方案。”
 
@@ -18,7 +18,7 @@
 
 详细安装方式见[skill 安装说明](docs/skill_installation.md)。
 
-![DFT Workflow Toolkit：从研究问题到可追溯证据，连接科研人员、AI agent 与 VASP 工作站](docs/assets/workflow-banner.svg)
+![DFT Workflow Skill：从研究问题到可追溯证据，连接科研人员、AI agent 与 VASP 工作站](docs/assets/workflow-banner.svg)
 
 [开始使用 →](docs/getting_started.md) · [探索能力 →](docs/capabilities.md) · [Agent 协作指引 →](AGENTS.md)
 

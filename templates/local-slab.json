@@ -1,0 +1,18 @@
+{
+  "operation": "slab",
+  "source_class": "user_candidate",
+  "provenance": null,
+  "source_format": "vasp",
+  "source_file": null,
+  "miller": null,
+  "layers": null,
+  "in_plane_repeats": null,
+  "vacuum_below_angstrom": null,
+  "vacuum_above_angstrom": null,
+  "freeze_bottom_planes": null,
+  "trim_bottom_planes": null,
+  "trim_top_planes": null,
+  "plane_tolerance_angstrom": null,
+  "termination_description": null,
+  "minimum_separation_angstrom": null
+}

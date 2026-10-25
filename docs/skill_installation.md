@@ -4,10 +4,10 @@
 
 ## 从 GitHub 安装
 
-请 agent 从 `https://github.com/kardson/dft-workflow-toolkit` 安装 `vasp-dft-workflow` skill。使用本机 skill-installer 时，GitHub 仓库根目录必须显式指定 skill 名称：
+请 agent 从 `https://github.com/kardson/dft-workflow-skill` 安装 `vasp-dft-workflow` skill。使用本机 skill-installer 时，GitHub 仓库根目录必须显式指定 skill 名称：
 
 ```text
-repo: kardson/dft-workflow-toolkit
+repo: kardson/dft-workflow-skill
 path: .
 name: vasp-dft-workflow
 ```

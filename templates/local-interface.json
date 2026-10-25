@@ -1,0 +1,14 @@
+{
+  "operation": "interface",
+  "source_class": "user_candidate",
+  "provenance": null,
+  "source_format": "vasp",
+  "substrate_file": null,
+  "film_file": null,
+  "lateral_match": null,
+  "film_xy_shift_angstrom": null,
+  "gap_angstrom": null,
+  "vacuum_below_angstrom": null,
+  "vacuum_above_angstrom": null,
+  "minimum_separation_angstrom": null
+}

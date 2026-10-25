@@ -159,14 +159,32 @@ def map_receipt(receipt: dict, receipt_path: Path) -> dict:
             for item in backends
         )
         if live_observation:
-            base["effects_observed"]["remote_tool_call"] = True
+            # Historical receipts predate transport fields and used the sole
+            # SSH adapter. New WSL receipts must carry explicit local evidence.
+            observed = []
+            for item in backends:
+                if not isinstance(item, dict) or type(item.get('returncode')) is not int:
+                    observed.append(None)
+                elif item.get('transport') == 'wsl':
+                    observed.append(False if item.get('execution_location') == 'local'
+                                    and item.get('workstation_contacted') is False
+                                    and isinstance(item.get('distribution'), str) else None)
+                elif item.get('transport') in (None, 'ssh'):
+                    observed.append(True)
+                else:
+                    observed.append(None)
+            base["effects_observed"]["remote_tool_call"] = (True if True in observed else
+                False if observed and all(value is False for value in observed) else None)
             for index, item in enumerate(backends):
                 if isinstance(item, dict) and type(item.get("returncode")) is int:
                     ref(_ptr("/backend_receipts", index), item, "returncode")
                     ref(_ptr("/backend_receipts", index), item, "command")
+                    ref(_ptr("/backend_receipts", index), item, "transport")
+                    ref(_ptr("/backend_receipts", index), item, "execution_location")
+                    ref(_ptr("/backend_receipts", index), item, "workstation_contacted")
         ref("", receipt, "backend_evidence_mode")
         ref("", receipt, "backend_receipts")
-        if not live_observation:
+        if not live_observation or base["effects_observed"]["remote_tool_call"] is None:
             base["missing"].append("reliable observed remote_tool_call evidence")
         base["effects_observed"]["local_artifact_write"] = True if passed is True and isinstance(top("delivery_scope"), str) else None
         ref("", receipt, "passed")

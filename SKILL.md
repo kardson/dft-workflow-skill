@@ -29,6 +29,8 @@ For explicitly authorized Linux SSH fixed-cell deployment, read [the workstation
 
 ## Route each request
 
+- For explicit-source structure candidates, geometry previews, controlled HTML or static input archives, read [local tools](docs/local_tools.md). Preserve unresolved scientific choices and original label/mask/source checks.
+
 - For a progress question, use only the one-time, read-only progress route described in [the run and delivery guide](docs/capabilities.md#运行与交付节奏). Do not start polling or background monitoring.
 - Before using tools for planning, parameter review, or metrics, select an independent user-owned research workspace and set `DFT_WORKSPACE_ROOT` explicitly. Keep research inputs, outputs, and records there; never write scientific work into the installed skill directory.
 - For a new calculation, follow the six steps below. For a planning-only, input-review, failure-diagnosis, or result-analysis request, enter at the relevant step and do not force unrelated steps.

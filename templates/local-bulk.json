@@ -1,0 +1,9 @@
+{
+  "operation": "bulk",
+  "source_class": "user_candidate",
+  "provenance": null,
+  "source_format": "vasp",
+  "source_file": null,
+  "repeats": null,
+  "minimum_separation_angstrom": null
+}
