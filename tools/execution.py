@@ -208,7 +208,13 @@ def main(argv=None):
         summary = "本次核实时计算在运行；报告后结束本轮。"
     else:
         summary = "现有证据不能完整判断计算状态，需要保留未知。"
-    lines = ["# 执行与取证交付", "", summary, "", "核实时间：" + str(result["observed_utc"]), "", "观察状态：" + result["state"],
+    presentation_text = "旧工具根未提供分层摘要；原始观察见 snapshot.json。"
+    if (args.tool_root / "quick_status_summary.py").is_file():
+        presentation = subprocess.run([str(args.python), "-X", "utf8", "-B", str(args.tool_root.resolve() / "progress_evidence.py"),
+                                       "summarize-status", "--snapshot", str(snapshot_path.resolve())],
+                                      capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10, check=True)
+        presentation_text = presentation.stdout.strip()
+    lines = ["# 执行与取证交付", "", summary, "", presentation_text, "", "核实时间：" + str(result["observed_utc"]), "", "观察状态：" + result["state"],
              "", "启动核验：" + result["startup_result"], "", "下一动作：" + result["next_action"],
              "", "仅代表记录时刻；本工具不持续盯守，也未回收输出或作科学接受。", ""]
     (args.output_dir / "README.md").write_text("\n".join(lines), encoding="utf-8")

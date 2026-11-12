@@ -61,6 +61,7 @@ class DeploymentTests(unittest.TestCase):
             calls=[]
             def transfer(argv, **kwargs):
                 calls.append(argv)
+                self.assertIn('StrictHostKeyChecking=yes',argv)
                 payload=json.loads(kwargs['input'])
                 self.assertEqual({row['name'] for row in payload['files']},set(files))
                 self.assertEqual(payload['directory'],target['directory'])
@@ -86,7 +87,9 @@ class DeploymentTests(unittest.TestCase):
         deployment={'schema':'dft-deployment-receipt/v1','status':'DEPLOYED_NOT_STARTED','target':target,'files_sha256':{'launch_supervisor.sh':'a'*64}}
         identity={'task_id':'t','unit_id':'u','execution_id':'e'}
         authority={'schema':'dft-launch-authority/v1','target':target,'files_sha256':deployment['files_sha256'],'identity':identity,'gate_sha256':'b'*64,'session':'synthetic','user_confirmation':{'reference':'synthetic','quote':'synthetic launch'}}
-        def run(argv,**kwargs): return subprocess.CompletedProcess(argv,0,'LAUNCH_REQUESTED:'+json.dumps(identity),'')
+        def run(argv,**kwargs):
+            self.assertIn('StrictHostKeyChecking=yes',argv)
+            return subprocess.CompletedProcess(argv,0,'LAUNCH_REQUESTED:'+json.dumps(identity),'')
         self.assertEqual(launch(deployment,authority,runner=run)['status'],'STARTUP_EVIDENCE_REQUIRED')
         authority['gate_sha256']='unknown'
         with self.assertRaises(ValueError): launch(deployment,authority,runner=run)

@@ -4,10 +4,14 @@ import hashlib
 import json
 from pathlib import Path, PurePosixPath
 
+DEFAULT_PRESERVE = ('local-adapter.md', 'LOCAL-SOURCE.md')
+
 
 def verified(root):
     root = Path(root).resolve(strict=True)
     manifest_path = root / "release_manifest.json"
+    if manifest_path.is_symlink() or not manifest_path.is_file():
+        raise ValueError('Regular release manifest required')
     raw = manifest_path.read_bytes(); value = json.loads(raw)
     if value.get("schema") != "public-release-allowlist/v1":
         raise ValueError("Unsupported release manifest")
@@ -29,7 +33,7 @@ def verified(root):
     return files, hashlib.sha256(raw).hexdigest()
 
 
-def stage_upgrade(candidate, installed, destination, preserve=("local-adapter.md",)):
+def stage_upgrade(candidate, installed, destination, preserve=DEFAULT_PRESERVE):
     candidate = Path(candidate).resolve(strict=True); installed = Path(installed).resolve(strict=True)
     destination = Path(destination).resolve()
     for root in (candidate, installed):
@@ -38,6 +42,18 @@ def stage_upgrade(candidate, installed, destination, preserve=("local-adapter.md
     files, version = verified(candidate)
     old_manifest = installed / "release_manifest.json"
     old_identity = hashlib.sha256(old_manifest.read_bytes()).hexdigest() if old_manifest.is_file() else None
+    installed_state, installed_issue = 'NO_RELEASE_MANIFEST', None
+    listed = set()
+    if old_manifest.is_file():
+        try:
+            old_value = json.loads(old_manifest.read_text(encoding='utf-8-sig'))
+            listed = {row['path'] for row in old_value['files']}
+            verified(installed)
+            installed_state = 'MANIFEST_MATCHED'
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            installed_state, installed_issue = 'UNVERIFIED_OR_LOCALLY_MODIFIED', str(error)
+    unlisted = [path.name for path in installed.iterdir() if path.is_file()
+                and path.name not in listed and path.name != 'release_manifest.json']
     # Explicitly preserve local resources separately; never inject them into verified release files.
     local = {}
     for name in preserve:
@@ -59,6 +75,11 @@ def stage_upgrade(candidate, installed, destination, preserve=("local-adapter.md
               "status": "STAGED_NOT_ACTIVATED", "compatibility": "UNVERIFIED",
               "old_installation_modified": False, "running_tasks_migrated": False,
               "next_actions": ["Review installed local instructions and other custom files", "Verify environment and relevant tests against staged package", "Reapply local routing after review", "Switch discovery only after explicit approval; keep active jobs on original tools"]}
+    record.update(installed_manifest_state=installed_state, installed_manifest_issue=installed_issue,
+                  requested_preserve=list(preserve), missing_local=[name for name in preserve if name not in local],
+                  installed_top_level_unlisted=sorted(unlisted),
+                  preserved_local_sha256={name: hashlib.sha256(data).hexdigest() for name, data in local.items()},
+                  inspection_scope='Manifest-listed installation files and top-level names only; other custom directories need explicit review')
     (destination / "upgrade.json").write_text(json.dumps(record, indent=2), encoding="utf-8")
     return record
 
@@ -69,7 +90,7 @@ def main():
         parser.add_argument("--" + name, required=True, type=Path)
     parser.add_argument("--preserve", action="append", help="Local file to preserve separately; repeat for multiple files")
     args = parser.parse_args()
-    stage_upgrade(args.candidate, args.installed, args.destination, args.preserve or ("local-adapter.md",))
+    stage_upgrade(args.candidate, args.installed, args.destination, args.preserve or DEFAULT_PRESERVE)
 
 if __name__ == "__main__":
     main()

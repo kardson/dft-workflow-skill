@@ -26,6 +26,10 @@ def controlled_report(facts, review, workspace, output):
     out = Path(output).resolve()
     facts_data = json.loads(Path(facts).read_text(encoding='utf-8'))
     review_data = json.loads(Path(review).read_text(encoding='utf-8'))
+    if digest(facts) != delivery['facts_sha256'] or digest(review) != delivery['review_sha256']:
+        raise ValueError('Facts or review changed between controlled report formats')
+    brief = json.loads((out / 'brief.json').read_text(encoding='utf-8'))
+    evidence_index = json.loads((out / 'evidence_index.json').read_text(encoding='utf-8'))
     recovered = json.loads(Path(facts_data['recovery_ref']).read_text(encoding='utf-8'))
     recovered_poscar = Path(recovered['analysis_source']) / 'POSCAR'
     images = []
@@ -41,9 +45,13 @@ def controlled_report(facts, review, workspace, output):
             downloads.append((path.name, path.read_bytes()))
     analysis.sources(recovered, root)
     escape = html.escape
-    cards = ''.join('<section><h2>' + escape(label) + '</h2><p>' + escape(str(review_data[key])) + '</p></section>'
+    cards = ''.join('<section><h2>' + escape(label) + '</h2><p>' + escape(str(brief[key])) + '</p></section>'
                     for label, key in [('Result', 'answer'), ('Basis and confidence', 'confidence_and_basis'),
                                        ('Comparability', 'comparability'), ('Limits', 'limits'), ('Next action', 'next_action')])
+    cards += '<section><h2>Observation and scope</h2><p>' + escape(str(brief['observed_utc'])) + ' / ' + escape(str(brief['parser_status'])) + '</p><ul>'
+    cards += ''.join('<li>' + escape(str(warning)) + '</li>' for warning in brief['warnings']) + '</ul></section>'
+    cards += '<section><h2>Next action basis and owner</h2><p>' + escape(brief['next_action_reason']) + ' / ' + escape(brief['next_action_owner']) + '</p></section>'
+    cards += '<details><summary>Claim evidence index</summary><pre>' + escape(json.dumps(evidence_index, ensure_ascii=False, indent=2)) + '</pre></details>'
     figures = ''.join('<figure><img alt="' + escape(label, quote=True) + '" src="data:image/png;base64,'
                       + base64.b64encode(path.read_bytes()).decode('ascii') + '"><figcaption>'
                       + escape(label) + '</figcaption></figure>' for label, path in images)
@@ -59,10 +67,13 @@ def controlled_report(facts, review, workspace, output):
             'Scientific acceptance and new calculation authorization are not granted by this report.</p>' + cards + figures
             + '<section><h2>Embedded data</h2><ul>' + links + '</ul></section><details><summary>Original reviewed report</summary><pre>'
             + escape(Path(delivery['report']).read_text(encoding='utf-8')) + '</pre></details></html>')
+    if digest(facts) != delivery['facts_sha256'] or digest(review) != delivery['review_sha256']:
+        raise ValueError('Facts or review changed during HTML rendering')
     (out / 'report.html').write_text(text, encoding='utf-8')
     delivery['html_report'] = str(out / 'report.html')
     delivery['html_source_class'] = 'presentation_of_controlled_facts_and_review'
     delivery['html_data_embed_limit_bytes'] = 2_000_000
+    delivery['delivery_artifacts']['report.html'] = {'path': str(out / 'report.html'), 'sha256': digest(out / 'report.html')}
     write_json(out / 'delivery.json', delivery)
     return delivery
 

@@ -6,6 +6,7 @@ import tempfile
 import subprocess
 import sys
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 from ase.build import bulk
@@ -16,6 +17,25 @@ from local_delivery import archive_static
 
 
 class LocalWorkflowTests(unittest.TestCase):
+    def test_html_refuses_review_changed_between_formats(self):
+        admin = Path(__file__).resolve().parents[1] / 'agent_workflow'
+        sys.path.insert(0, str(admin))
+        import analysis
+        from test_analysis import fixture, review, run_parse
+        from local_delivery import controlled_report
+        fixture(self.root);run_parse(self.root);review(self.root)
+        original = analysis.render
+        def changed(*args, **kwargs):
+            result = original(*args, **kwargs)
+            path = self.root / 'review.json'
+            value = json.loads(path.read_text(encoding='utf-8'));value['limits'] += ' changed'
+            path.write_text(json.dumps(value),encoding='utf-8')
+            return result
+        with patch.object(analysis, 'render', side_effect=changed):
+            with self.assertRaisesRegex(ValueError, 'between controlled report formats'):
+                controlled_report(self.root/'analysis/facts.json',self.root/'review.json',self.root,self.root/'delivery')
+        self.assertFalse((self.root/'delivery/report.html').exists())
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
@@ -139,6 +159,12 @@ class LocalWorkflowTests(unittest.TestCase):
         self.assertIn('&lt;script&gt;', page)
         self.assertNotIn('<script>', page)
         self.assertIn('data:image/png;base64,', page)
+        self.assertIn('Claim evidence index',page)
+        brief=json.loads((self.root/'report/brief.json').read_text(encoding='utf-8'))
+        index=json.loads((self.root/'report/evidence_index.json').read_text(encoding='utf-8'))
+        self.assertEqual(brief['answer'],reviewed['answer'])
+        self.assertEqual(index['answer'],brief['answer'])
+        self.assertEqual(result['facts_sha256'],brief['facts_sha256'])
         (self.root / 'returned/OUTCAR').write_text('changed source')
         with self.assertRaises(ValueError):
             controlled_report(self.root / 'analysis/facts.json', self.root / 'review.json', self.root, self.root / 'bad-report')

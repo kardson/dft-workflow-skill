@@ -79,7 +79,7 @@ def deploy(candidate, preparation, target, files, authority, runner=subprocess.r
         raise ValueError('Exact deployment authority required')
     encoded=json.dumps({'directory':directory,'files':payload})
     command=shlex.join([python,'-c',REMOTE])
-    child=runner(['ssh','-o','BatchMode=yes','-o','ConnectTimeout=15','-p',str(port),host,command],input=encoded,capture_output=True,text=True,timeout=60,check=True)
+    child=runner(['ssh','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=15','-p',str(port),host,command],input=encoded,capture_output=True,text=True,timeout=60,check=True)
     remote=json.loads(next(line[9:] for line in child.stdout.splitlines() if line.startswith('DEPLOYED:')))
     if remote!=identities:raise ValueError('Remote receipt differs from authorized file set')
     return {'schema':'dft-deployment-receipt/v1','target':target,'files_sha256':identities,'status':'DEPLOYED_NOT_STARTED','vasp_launched':False}
@@ -146,7 +146,7 @@ def launch(deployment, authority, runner=subprocess.run, *, action="launch"):
         if not re.fullmatch(r'[A-Za-z0-9_.-]+',name) or name in {'.','..'} or not re.fullmatch(r'[a-f0-9]{64}',digest_value):raise ValueError('Unsafe deployed member')
     payload={'action':action,'target':target,'files':deployment['files_sha256'],'gate_sha256':gate,'identity':identity,'session':session}
     command=shlex.join([target['python'],'-c',LAUNCH])
-    result=runner(['ssh','-o','BatchMode=yes','-o','ConnectTimeout=15','-p',str(target['port']),target['host'],command],input=json.dumps(payload),capture_output=True,text=True,timeout=30,check=True)
+    result=runner(['ssh','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=15','-p',str(target['port']),target['host'],command],input=json.dumps(payload),capture_output=True,text=True,timeout=30,check=True)
     prefix='PREPARED:' if action=='prepare' else 'LAUNCH_REQUESTED:'
     returned=json.loads(next(line[len(prefix):] for line in result.stdout.splitlines() if line.startswith(prefix)))
     if returned!=identity:raise ValueError('Launch receipt identity mismatch')

@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import shutil
 import unittest
 from unittest.mock import patch
 from contextlib import redirect_stdout
@@ -48,6 +49,61 @@ def authority(identity, checksum):
 
 
 class ExecutionTests(unittest.TestCase):
+    def test_offline_main_generates_report_with_current_and_legacy_tool_roots(self):
+        for legacy in (False, True):
+            with self.subTest(legacy=legacy), runtime_directory() as directory:
+                root = Path(directory)
+                tool_root = TOOLS
+                if legacy:
+                    tool_root = root / 'legacy-tools'; tool_root.mkdir()
+                    # A legacy root lacks the optional summary module, but still
+                    # needs the real verifier's transitive import dependencies.
+                    for name in ('progress_evidence.py', 'progress_snapshot.py', 'vasp_execution_state.py'):
+                        shutil.copyfile(TOOLS / name, tool_root / name)
+                snap, identity = fixture()
+                identity['remote_batch_dir'] = '/srv/dft/calculations/synthetic-task'
+                identity['remote_case_dir'] = identity['remote_batch_dir'] + '/case'
+                manifest = root / 'manifest.json'
+                manifest.write_text(json.dumps({**identity, 'route': 'vasp', 'case': 'case'}), encoding='utf-8')
+                snap.update(query_status='PARTIAL', canonical_status='UNKNOWN', state_consistency='UNKNOWN')
+                snap['sources'] = {}
+                snap['reasons'] = ['remote status sources are missing']
+                source = root / 'source.json'; source.write_text(json.dumps(snap), encoding='utf-8')
+                output = root / 'delivery'
+                argv = [sys.executable, '-X', 'utf8', '-B', str(Path(execution.__file__).resolve()),
+                        '--manifest', str(manifest), '--tool-root', str(tool_root.resolve()), '--snapshot', str(source),
+                        '--trigger', 'user', '--output-dir', str(output)]
+                # Neither the test runner's imports nor its working directory
+                # should supply dependencies missing from the supplied root.
+                child_env = os.environ.copy()
+                child_env.pop('PYTHONPATH', None)
+                child = subprocess.run(argv, capture_output=True, text=True, encoding='utf-8', timeout=20,
+                                       cwd=root, env=child_env)
+                diagnostic = f'CLI returncode={child.returncode}\nstdout:\n{child.stdout}\nstderr:\n{child.stderr}'
+                self.assertEqual(child.returncode, 1, diagnostic)
+                report_path = output / 'README.md'
+                self.assertTrue(report_path.is_file(), diagnostic)
+                self.assertEqual(json.loads(child.stdout), {'state': 'UNKNOWN', 'next_action': 'REPORT_AND_END'})
+                report = report_path.read_text(encoding='utf-8')
+                self.assertIn('旧工具根' if legacy else '连接与采集', report)
+                self.assertIn('UNKNOWN', report)
+                self.assertEqual(json.loads((output / 'snapshot.json').read_text(encoding='utf-8')), snap)
+                self.assertFalse(json.loads((output / 'execution_handoff.json').read_text())['continuous_monitoring'])
+
+    def test_partial_json_with_nonzero_cli_exit_is_preserved(self):
+        snap, identity = fixture()
+        snap.update(query_status='PARTIAL', canonical_status='UNKNOWN', state_consistency='UNKNOWN')
+        with runtime_directory() as directory:
+            manifest = Path(directory) / 'manifest.json'
+            manifest.write_text('{}')
+            auth = authority(identity, execution.digest(manifest))
+            calls = []
+            def runner(argv, **kwargs):
+                calls.append(argv)
+                return subprocess.CompletedProcess(argv, 3, json.dumps(snap), '')
+            self.assertEqual(execution.query_once(manifest, TOOLS, sys.executable, auth, identity, 'user', runner=runner), snap)
+            self.assertEqual(len(calls), 1)
+
     def test_terminal_timing_without_status_needs_exit_and_stable_identity(self):
         snap,identity=fixture('COMPLETED_PENDING_REVIEW')
         snap['sources']['run_timing'].update(raw_status=None,exit_codes={'exit_code':'0'})

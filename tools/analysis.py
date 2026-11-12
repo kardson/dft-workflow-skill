@@ -133,6 +133,9 @@ def parse(recovery_path, plan_path, stage_id, approved, requirements, workspace,
                     "parameter_comparison": checked.get("parameter_comparison", {}).get("status", "UNKNOWN"),
                     "steps": summary.get("steps", [])}
     warnings = list(errors)
+    warnings.extend('科学量语义限制：' + str(item) for item in summary.get('semantic_limitations', []))
+    observations['quantity_metadata'] = summary.get('quantity_metadata', {})
+    observations['force_semantics'] = summary.get('force_semantics', {})
     invalid_numbers = []
     def finite_values(value, location="observations"):
         if isinstance(value, float) and not math.isfinite(value):
@@ -198,6 +201,14 @@ def update_card(path, task_id, content):
         old = before.decode("utf-8-sig")
         if old.count(begin) != 1 or old.count(end) != 1 or old.index(begin) > old.index(end):
             raise ValueError("Existing card needs one explicit matching task slot; preserve its history")
+        previous = old.split(begin, 1)[1].split(end, 1)[0]
+        nav_start, nav_end = '<!-- CONTINUATION_BEGIN -->', '<!-- CONTINUATION_END -->'
+        if nav_start in previous or nav_end in previous:
+            if previous.count(nav_start) != 1 or previous.count(nav_end) != 1 or previous.index(nav_start) > previous.index(nav_end):
+                raise ValueError('Conflicting task continuation slot')
+            if nav_start not in content and nav_end not in content:
+                navigation = previous[previous.index(nav_start):previous.index(nav_end) + len(nav_end)]
+                block = begin + '\n' + content + '\n\n' + navigation + '\n' + end
         text_value = old[:old.index(begin)] + block + old[old.index(end) + len(end):]
     else:
         text_value = block + "\n"
@@ -241,6 +252,8 @@ def render(facts_path, review_path, workspace, output, task_card=None):
                     for token in pointer[1:].split("/"):
                         token = token.replace("~1", "/").replace("~0", "~")
                         try:
+                            if isinstance(value, list) and not re.fullmatch(r'0|[1-9][0-9]*', token):
+                                raise ValueError('Array pointer needs a nonnegative canonical index')
                             value = value[int(token)] if isinstance(value, list) else value[token]
                         except (KeyError, IndexError, TypeError, ValueError) as error:
                             raise ValueError("Evidence field does not exist") from error
@@ -268,6 +281,45 @@ def render(facts_path, review_path, workspace, output, task_card=None):
         for ref in refs:
             private_path(root, ref)
         attachments.append(artifact)
+    # Freeze a navigable evidence index after the existing source checks. The
+    # index is an observed linkage, not an automated judgment of claim truth.
+    explicit = review.get('evidence_sha256', {})
+    if not isinstance(explicit, dict):
+        raise ValueError('evidence_sha256 must map exact evidence references to digests')
+    claims, used_refs = [], set()
+    known_artifacts = {str(private_path(root, artifact['path'])) for artifact in [*facts.get('artifacts', []), *attachments]}
+    for group in ('observations', 'interpretations'):
+        for index, claim in enumerate(review[group], 1):
+            refs = []
+            for ref in claim['evidence_refs']:
+                path = private_path(root, ref.split('#', 1)[0])
+                observed = digest(path)
+                if ref in explicit and explicit[ref] != observed:
+                    raise ValueError('Claim evidence changed after explicit review binding')
+                used_refs.add(ref)
+                refs.append({'ref': ref, 'path': str(path), 'sha256': observed,
+                             'binding': 'EXPLICIT_REVIEW_BOUND' if ref in explicit else 'CURRENT_SOURCE_CHECKS_AND_POINTER_VALIDATION'})
+            artifact_refs = claim.get('artifact_refs', [])
+            if not isinstance(artifact_refs, list):
+                raise ValueError('Explicit artifact_refs list required when supplied')
+            for ref in artifact_refs:
+                if str(private_path(root, ref)) not in known_artifacts:
+                    raise ValueError('Claim artifact is not part of controlled delivery')
+            claims.append({'id': group + ':' + str(index), 'kind': group, 'text': claim['text'],
+                           'evidence': refs, 'artifact_refs': artifact_refs, 'comparability': review['comparability'],
+                           'limits': review['limits'], 'method_ref': facts['analysis_driver']})
+    if set(explicit) - used_refs:
+        raise ValueError('Review evidence binding does not name a cited claim reference')
+    evidence_index = {'schema': 'dft-result-evidence-index/v1', 'task_id': facts['task_id'], 'identity': facts['identity'],
+                      'claims': claims, 'answer': review['answer'], 'answer_claim_ids': [claim['id'] for claim in claims],
+                      'facts_ref': str(facts_path), 'facts_sha256': digest(facts_path),
+                      'review_ref': str(review_path), 'review_sha256': digest(review_path),
+                      'context': {key: facts.get(key) for key in ('plan_ref', 'recovery_ref', 'approved_spec_ref', 'requirements_ref', 'preparation_ref', 'backend_ref')},
+                      'raw_sources': load(private_path(root, facts['recovery_ref'])).get('files', {}),
+                      'supporting_artifacts': attachments,
+                      'scientific_decision_ref': review.get('scientific_decision_ref'),
+                      'scientific_acceptance': 'NOT_GRANTED_BY_TOOL',
+                      'scope': 'Validated file/pointer linkage; claim support, comparisons and scientific acceptance require route review'}
     output = Path(output).resolve()
     output.relative_to(root)
     if output.exists():
@@ -296,8 +348,28 @@ def render(facts_path, review_path, workspace, output, task_card=None):
     report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     record = {"schema": "dft-result-delivery/v1", "task_id": facts["task_id"], "identity": facts["identity"],
               "facts_ref": str(facts_path), "review_ref": str(review_path), "report": str(report_path),
+              "facts_sha256": digest(facts_path), "review_sha256": digest(review_path),
               "scientific_acceptance": "NOT_GRANTED_BY_TOOL", "new_calculation_authorized": False}
     record["supporting_artifacts"] = attachments
+    brief = {'schema': 'dft-result-brief/v1', 'task_id': facts['task_id'], 'identity': facts['identity'],
+             'research_question': facts['research_question'], 'answer': review['answer'],
+             'observed_utc': facts.get('source_observed_utc'), 'parser_status': facts['observations']['parser_status'],
+             'confidence_and_basis': review['confidence_and_basis'], 'comparability': review['comparability'],
+             'limits': review['limits'], 'warnings': facts['warnings'], 'next_action': review['next_action'],
+             'next_action_reason': review['next_action_reason'], 'next_action_owner': review['next_action_owner'],
+             'facts_sha256': record['facts_sha256'], 'review_sha256': record['review_sha256'],
+             'scientific_acceptance': 'NOT_GRANTED_BY_TOOL'}
+    brief_lines = ['# 结果简报', '', '研究问题：' + brief['research_question'], '', '结果：' + brief['answer'],
+                   '', '观察时间：' + str(brief['observed_utc']), '解析范围：' + str(brief['parser_status']),
+                   '依据与可信程度：' + brief['confidence_and_basis'], '比较条件：' + brief['comparability'],
+                   '', '限制：' + brief['limits'], *('- ' + warning for warning in brief['warnings']),
+                   '', '下一步：' + brief['next_action'], '理由：' + brief['next_action_reason'], '负责人：' + brief['next_action_owner'],
+                   '', '证据索引：evidence_index.json；完整报告：README.md。科学接受不由本工具授予。']
+    (output / 'brief.md').write_text('\n'.join(brief_lines) + '\n', encoding='utf-8')
+    for name, value in (('brief.json', brief), ('evidence_index.json', evidence_index)):
+        (output / name).write_text(json.dumps(value, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    record['delivery_artifacts'] = {name: {'path': str(output / name), 'sha256': digest(output / name)}
+                                    for name in ('README.md', 'brief.md', 'brief.json', 'evidence_index.json')}
     cell = lambda value: str(value).replace("|", "\\|").replace("\n", " ")
     card = ("## 简明任务卡\n\n| 项目 | 当前记录 |\n|---|---|\n| 研究问题 | " + cell(facts["research_question"]) +
             " |\n| 当前阶段 | 结果已整理；解析完整性：" + cell(facts["observations"]["parser_status"]) +

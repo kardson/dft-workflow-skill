@@ -29,13 +29,26 @@ def resume(record, workspace):
             problems.append("MISSING:" + ref["path"])
         elif hashlib.sha256(path.read_bytes()).hexdigest() != expected:
             problems.append("CHANGED:" + ref["path"])
-    return {"schema": "dft-resume-report/v1", "task_id": value["task_id"],
+    if value.get('navigation') is not None and not problems:
+        from task_checkpoint import navigation_context
+        nav = value['navigation']
+        if not isinstance(nav, dict) or not isinstance(nav.get('source_ref'), str):
+            raise ValueError('Invalid navigation binding')
+        rebuilt, bindings = navigation_context(root / nav['source_ref'], root, value['task_id'])
+        recorded = {(row['path'], row['sha256']) for row in refs}
+        if nav != rebuilt or any((row['path'], row['sha256']) not in recorded for row in bindings):
+            problems.append('NAVIGATION_BINDING_CHANGED')
+    result = {"schema": "dft-resume-report/v1", "task_id": value["task_id"],
             "recorded_stage": value["stage"], "writer": value["writer"],
             "recorded_approval_scope": value.get("approval_scope"),
             "status": "BLOCKED" if problems else "CONTEXT_RESTORED",
             "next_action": "RECONCILE_EVIDENCE" if problems else ACTIONS[value["stage"]],
             "problems": problems, "execution_authorized": False,
             "limitations": ["Restored evidence is historical, not current runtime status", "Approval scope is a recorded claim; verify original approval before action", "Recommendations are not executed"]}
+    if value.get('navigation') is not None:
+        result['navigation'] = value['navigation']
+        result['navigation_status'] = 'RECONCILE_SOURCES' if problems else 'REFERENCES_UNCHANGED_NOT_AUTHORITY_VERIFIED'
+    return result
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

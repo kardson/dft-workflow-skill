@@ -7,7 +7,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from pymatgen.io.vasp.outputs import Vasprun, Oszicar, Outcar
-from practical_geometry import inspect_geometry, export_frame
+from practical_geometry import inspect_geometry, export_frame, free_force_components
 
 def destination(path):
     path = Path(path).resolve()
@@ -24,6 +24,13 @@ def analyze(source, output):
     out = destination(output)
     report = dict(schema='vasp-practical-analysis/v1', source=str(source),
                   scientific_acceptance='NOT_EVALUATED', parser='pymatgen', status='PARTIAL')
+    report['quantity_metadata'] = {
+        key: {'unit': 'eV', 'normalization': 'total', 'energy_basis': basis, 'backend': 'VASP',
+              'functional': None, 'paw_environment': None, 'reference_state': None}
+        for key, basis in (('free_energy_eV', 'F'), ('energy_zero_eV', 'E0'))}
+    report['force_semantics'] = {'unit': 'eV/angstrom', 'coordinate_basis': 'Cartesian',
+                                'constraint_basis': 'lattice_directions', 'atom_mapping': 'actual POSCAR order'}
+    report['semantic_limitations'] = []
     steps = []
     try:
         run = Vasprun(source/'vasprun.xml', parse_dos=False, parse_eigen=False, parse_potcar_file=False,
@@ -40,6 +47,9 @@ def analyze(source, output):
         if list(run.atomic_symbols)!=geometry['chemical_symbols']:
             raise ValueError('POSCAR/XML species order differs')
         report['geometry_inspection']=geometry
+        report['force_semantics'].update(
+            atom_mapping=[str(index) + ':' + atom['species'] for index, atom in enumerate(poscar['atoms'], 1)],
+            constraints=masks, cell_basis=run.final_structure.lattice.matrix.tolist())
         report.update(status='COMPLETE_XML', electronic_converged=bool(run.converged_electronic),
                       ionic_converged=bool(run.converged_ionic), nions=len(run.final_structure),
                       efermi_eV=run.efermi, parameters={k:run.parameters.get(k) for k in ['NSW','NELM','EDIFF','EDIFFG','IBRION','ISTART','ICHARG']},
@@ -48,8 +58,16 @@ def analyze(source, output):
             forces = np.asarray(step.get('forces', []))
             free_force = None
             if forces.size and poscar['mask_status'] == 'OK':
-                masked = np.where(np.asarray(masks, dtype=bool), forces, 0)
-                free_force = float(np.linalg.norm(masked, axis=1).max())
+                frame = step.get('structure', run.final_structure)
+                masked, force_status = free_force_components(forces, np.asarray(masks, dtype=bool), frame.lattice.matrix)
+                if masked is not None:
+                    free_force = float(np.linalg.norm(masked, axis=1).max())
+                elif force_status not in report['semantic_limitations']:
+                    report['semantic_limitations'].append(force_status)
+            elif forces.size and poscar['mask_status'] != 'OK':
+                limitation = 'FREE_FORCE_SUPPRESSED:' + str(poscar['mask_status'])
+                if limitation not in report['semantic_limitations']:
+                    report['semantic_limitations'].append(limitation)
             steps.append(dict(step=index, free_energy_eV=step.get('e_fr_energy'),
                               energy_zero_eV=step.get('e_0_energy'), electronic_steps=len(step.get('electronic_steps',[])),
                               max_force_eV_A=float(np.linalg.norm(forces,axis=1).max()) if forces.size else None,

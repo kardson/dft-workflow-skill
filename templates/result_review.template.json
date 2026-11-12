@@ -9,6 +9,7 @@
   "observations": [],
   "interpretations": [],
   "supporting_artifacts": [],
+  "evidence_sha256": {},
   "scientific_decision_ref": null,
   "limits": null,
   "next_action": null,

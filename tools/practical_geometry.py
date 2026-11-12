@@ -10,6 +10,18 @@ from ase.io.vasp import _handle_ase_constraints
 from pymatgen.io.vasp.inputs import Poscar
 from progress_snapshot import parse_poscar
 
+
+def free_force_components(forces, masks, cell):
+    """Cartesian masking only where lattice-direction flags have that meaning."""
+    forces, masks, cell = np.asarray(forces, dtype=float), np.asarray(masks), np.asarray(cell, dtype=float)
+    if (forces.ndim != 2 or forces.shape[1] != 3 or masks.shape != forces.shape or masks.dtype != np.bool_
+            or cell.shape != (3, 3) or not np.isfinite(forces).all() or not np.isfinite(cell).all()):
+        raise ValueError('Finite Nx3 force array, matching boolean masks and cell required')
+    mixed = np.any(np.any(masks, axis=1) & ~np.all(masks, axis=1))
+    if mixed and not np.allclose(cell, np.diag(np.diag(cell)), atol=1e-10, rtol=0):
+        return None, 'UNSUPPORTED_MIXED_LATTICE_CONSTRAINTS'
+    return np.where(masks, forces, 0.0), 'CARTESIAN_COMPONENTS_SUPPORTED'
+
 def inspect_geometry(path, output=None):
     path=Path(path)
     text=path.read_text()

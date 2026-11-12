@@ -1,0 +1,13 @@
+{
+  "schema": "dft-task-navigation/v1",
+  "task_id": null,
+  "update_reason": null,
+  "sources": [
+    {"role": "research", "path": null},
+    {"role": "plan", "path": null},
+    {"role": "approval", "path": null}
+  ],
+  "open_questions": [],
+  "next_action": null,
+  "next_action_owner": null
+}

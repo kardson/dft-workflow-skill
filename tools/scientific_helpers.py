@@ -5,10 +5,11 @@ import argparse
 import json
 from pathlib import Path
 import re
+import math
 
 import numpy as np
 
-from practical_geometry import inspect_geometry
+from practical_geometry import inspect_geometry, free_force_components
 from progress_snapshot import parse_poscar
 
 
@@ -69,18 +70,23 @@ def geometry_comparison(initial, final, pairs, baseline_indices, target_indices,
         run = Vasprun(vasprun, parse_dos=False, parse_eigen=False, parse_potcar_file=False)
         if len(run.final_structure) != n or list(run.atomic_symbols) != atoms.get_chemical_symbols():
             raise ValueError('Vasprun species/order differs from compared POSCAR')
+        if (not np.allclose(run.final_structure.lattice.matrix, cell_b, atol=1e-6, rtol=0)
+                or not np.allclose((np.asarray(run.final_structure.frac_coords) - frac_b + 0.5) % 1 - 0.5, 0, atol=1e-6, rtol=0)):
+            raise ValueError('Vasprun final geometry differs from compared POSCAR')
         if not run.ionic_steps or 'forces' not in run.ionic_steps[-1]:
             raise ValueError('Vasprun final force block is missing')
         forces = np.asarray(run.ionic_steps[-1]['forces'], dtype=float)
         if forces.shape != (n, 3) or not np.isfinite(forces).all():
             raise ValueError('Final force array is invalid')
-        free = forces * np.asarray(masks_b, dtype=bool)
+        free, force_status = free_force_components(forces, np.asarray(masks_b, dtype=bool), cell_b)
         report['force_metrics'] = {
             'source': str(Path(vasprun).resolve()),
             'max_all_eV_A': float(np.linalg.norm(forces, axis=1).max()),
-            'max_free_eV_A': float(np.linalg.norm(free, axis=1).max()),
+            'max_free_eV_A': float(np.linalg.norm(free, axis=1).max()) if free is not None else None,
+            'free_force_status': force_status,
+            'coordinate_basis': 'Cartesian', 'constraint_basis': 'lattice_directions',
             'targets': {str(i): {'raw_eV_A': forces[i-1].tolist(),
-                                 'free_eV_A': free[i-1].tolist()} for i in target_indices}}
+                                 'free_eV_A': free[i-1].tolist() if free is not None else None} for i in target_indices}}
     return report
 
 
@@ -102,10 +108,18 @@ def reference_energy(contract):
             raise ValueError(f'{role} result identity differs')
         if record.get('result_state') != 'COMPLETE_XML' or record.get('energy', {}).get('E0_eV') is None:
             raise ValueError(f'{role} lacks complete E0 evidence')
+        energy = record['energy']['E0_eV']
+        if type(energy) not in (int, float) or not math.isfinite(energy) or record.get('electronic_converged') is not True:
+            raise ValueError(f'{role} requires finite E0 and electronic convergence')
+        for key in ('case_id', 'attempt'):
+            if key in source and (type(source[key]) is not type(record.get(key)) or source[key] != record.get(key)):
+                raise ValueError(f'{role} result {key} differs')
         status = json.loads(Path(source['status_path']).read_text(encoding='utf-8'))
         if status.get('execution_id') != source['execution_id'] or not any(
             case.get('path') == source['status_case_path'] for case in status.get('cases', [])):
             raise ValueError(f'{role} result does not match run status identity')
+        if status.get('status') != 'COMPLETED':
+            raise ValueError(f'{role} run is not completed')
         def return_prefix(path):
             parts = Path(path).resolve().parts
             marker = next((i for i, part in enumerate(parts) if part.lower() == 'returns'), None)
@@ -118,10 +132,14 @@ def reference_energy(contract):
             raise ValueError(f'{role} lacks approved PAW identity')
         manifests[role] = manifest
     identities = [manifest['paw_identity'] for manifest in manifests.values()]
+    if any(not isinstance(item.get(key), str) or not item[key].strip() for item in identities for key in ('paw_family', 'environment_id')):
+        raise ValueError('Explicit PAW family and environment identity required')
     if len({identity.get('paw_family') for identity in identities}) != 1 or len({identity.get('environment_id') for identity in identities}) != 1:
         raise ValueError('PAW family or environment differs')
     components = {}
     for identity in identities:
+        if not identity.get('ordered_roles'):
+            raise ValueError('PAW components are missing')
         for role in identity.get('ordered_roles', []):
             digest = identity.get(role, {}).get('component_sha256')
             if not digest or (role in components and components[role] != digest):
@@ -132,7 +150,25 @@ def reference_energy(contract):
         raise ValueError('Atom box, K-point and spin differences need explicit approval')
     value = (records['combined']['energy']['E0_eV'] - records['clean']['energy']['E0_eV']
              - records['atom']['energy']['E0_eV'])
+    from quantity_semantics import compare
+    metadata = {}
+    supplied = contract.get('quantity_metadata', {})
+    for role in ('combined', 'clean', 'atom'):
+        known = {'unit': 'eV', 'normalization': 'total', 'energy_basis': 'E0', 'backend': 'VASP',
+                 'paw_environment': manifests[role]['paw_identity'].get('environment_id')}
+        declared = supplied.get(role, {})
+        if not isinstance(declared, dict) or any(key in declared and declared[key] != val for key, val in known.items()):
+            raise ValueError('Quantity metadata conflicts with actual E0 record or PAW environment')
+        metadata[role] = {**declared, **known}
+    comparisons = {role: compare('energy', metadata.get('combined', {}), metadata.get(role, {})) for role in ('clean', 'atom')}
+    if any(item['state'] == 'INCOMPATIBLE' for item in comparisons.values()):
+        raise ValueError('Reference energy quantity metadata is incompatible')
+    identity_gaps = [role + ':' + key for role in ('combined', 'clean', 'atom') for key in ('case_id', 'attempt')
+                     if key not in contract['sources'][role]]
     return {'schema': 'vasp-fixed-geometry-reference-result/v1', 'interaction_E0_eV': value,
+            'quantity_comparisons': comparisons, 'unit': 'eV', 'normalization': 'total',
+            'formal_comparability': 'REQUIRES_ROUTE_REVIEW' if not identity_gaps and all(item['state'] == 'MATCH' for item in comparisons.values()) else 'INSUFFICIENT_EVIDENCE',
+            'identity_limitations': identity_gaps,
             'source_execution_ids': {role: record['execution_id'] for role, record in records.items()},
             'energy_basis': 'E0', 'interpretation': 'FIXED_GEOMETRY_INTERACTION',
             'paw_family': identities[0]['paw_family'], 'paw_components_checked': sorted(components),

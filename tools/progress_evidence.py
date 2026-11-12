@@ -3533,11 +3533,24 @@ def cli(argv: list[str] | None = None) -> int:
         help="issue one bounded read-only SSH status query and emit compact JSON",
     )
     quick.add_argument("--manifest", required=True)
+    quick.add_argument("--format", choices=("json", "text"), default="json")
+    summary = sub.add_parser("summarize-status", help="summarize an existing snapshot locally; never connects")
+    summary.add_argument("--snapshot", required=True)
+    summary.add_argument("--format", choices=("json", "text"), default="text")
     args = parser.parse_args(argv)
     try:
+        if args.command == "summarize-status":
+            from quick_status_summary import summarize, render
+            snapshot = json.loads(Path(args.snapshot).read_text(encoding="utf-8-sig"))
+            print(render(snapshot) if args.format == "text" else json.dumps(summarize(snapshot), ensure_ascii=False))
+            return 0
         if args.command == "quick-status":
             result = quick_status(args.manifest)
-            print(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
+            if args.format == "text":
+                from quick_status_summary import render
+                print(render(result))
+            else:
+                print(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
             if not result.get("ssh", {}).get("attempted"):
                 return 2
             return 0 if result.get("query_status") == "OK" else 3

@@ -81,6 +81,38 @@ def review(root):
 
 
 class AnalysisTests(unittest.TestCase):
+    def test_brief_and_evidence_index_share_review_and_preserve_navigation(self):
+        with runtime_directory() as directory:
+            root=Path(directory);fixture(root);run_parse(root);value=review(root)
+            card=root/'card.md'
+            card.write_text('History\n<!-- AGENT_TASK_CARD_BEGIN:synthetic-plan -->\nOld science\n<!-- CONTINUATION_BEGIN -->\nKeep source navigation\n<!-- CONTINUATION_END -->\n<!-- AGENT_TASK_CARD_END:synthetic-plan -->\nOther task\n',encoding='utf-8')
+            result=analysis.render(root/'analysis/facts.json',root/'review.json',root,root/'delivery',card)
+            brief=json.loads((root/'delivery/brief.json').read_text(encoding='utf-8'))
+            index=json.loads((root/'delivery/evidence_index.json').read_text(encoding='utf-8'))
+            self.assertEqual(brief['answer'],value['answer'])
+            self.assertEqual(index['claims'][0]['text'],value['observations'][0]['text'])
+            self.assertIn('#/observations/parser_status',index['claims'][0]['evidence'][0]['ref'])
+            self.assertIn(value['limits'],(root/'delivery/brief.md').read_text(encoding='utf-8'))
+            self.assertIn('Keep source navigation',card.read_text(encoding='utf-8'))
+            self.assertTrue(card.read_text(encoding='utf-8').endswith('Other task\n'))
+            for row in result['delivery_artifacts'].values():
+                self.assertEqual(analysis.digest(row['path']),row['sha256'])
+
+    def test_explicit_claim_binding_and_unknown_artifact_are_rejected(self):
+        for mutate in ('hash','artifact','unused','negative_pointer'):
+            with self.subTest(mutate=mutate), runtime_directory() as directory:
+                root=Path(directory);fixture(root);run_parse(root);value=review(root)
+                ref=value['observations'][0]['evidence_refs'][0]
+                if mutate=='hash':value['evidence_sha256']={ref:'0'*64}
+                elif mutate=='unused':value['evidence_sha256']={'unused.txt':'0'*64}
+                elif mutate=='negative_pointer':value['observations'][0]['evidence_refs']=[str(root/'analysis/facts.json')+'#/warnings/-1']
+                else:
+                    path=root/'uncontrolled.txt';path.write_text('not in delivery')
+                    value['observations'][0]['artifact_refs']=[str(path)]
+                (root/'review.json').write_text(json.dumps(value))
+                with self.assertRaises(ValueError):analysis.render(root/'analysis/facts.json',root/'review.json',root,root/'delivery')
+                self.assertFalse((root/'delivery').exists())
+
     def test_requirements_must_match_preparation_before_backend_runs(self):
         with runtime_directory() as directory:
             root = Path(directory)
